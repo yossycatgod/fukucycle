@@ -27,6 +27,7 @@ ONLINE_USER_TTL_SECONDS = 15
 SERVER_CONTENT_REVISION = 0
 COMMUNITY_COLUMNS: list[dict] = []
 COMMUNITY_COLUMNS_LOCK = threading.RLock()
+CONTENT_STORAGE_LOCK = threading.RLock()
 
 
 METALS = {
@@ -3144,7 +3145,7 @@ def recovery_go_app(page: ft.Page) -> None:
     spots = [
         {"name": "丸の内リサイクルポート", "kind": "小型家電", "lat": 35.6798, "lon": 139.7638, "distance": 0, "x": .23, "y": .27, "color": "#D6A06C", "visited": False, "xp": 80},
         {"name": "京橋バッテリーステーション", "kind": "バッテリー", "lat": 35.6768, "lon": 139.7701, "distance": 0, "x": .70, "y": .22, "color": "#FFD86B", "visited": False, "xp": 120},
-        {"name": "有楽町デバイス回収所", "kind": "スマホ・PC", "lat": 35.6751, "lon": 139.7634, "distance": 0, "x": .72, "y": .57, "color": "#73D7FF", "visited": True, "xp": 100},
+        {"name": "有楽町デバイス回収所", "kind": "スマホ・PC", "lat": 35.6751, "lon": 139.7634, "distance": 0, "x": .72, "y": .57, "color": "#73D7FF", "visited": False, "xp": 100},
         {"name": "日本橋リユースラボ", "kind": "ゲーム機", "lat": 35.6825, "lon": 139.7744, "distance": 0, "x": .18, "y": .63, "color": "#BFA5FF", "visited": False, "xp": 150},
     ]
     data_file = Path(__file__).with_name("collection_points.json")
@@ -3203,9 +3204,14 @@ def recovery_go_app(page: ft.Page) -> None:
     def current_level() -> int:
         return xp // 1000
 
-    if state_file.exists():
+    if authenticated_username and state_file.exists():
         try:
-            saved_state = json.loads(state_file.read_text(encoding="utf-8"))
+            with CONTENT_STORAGE_LOCK:
+                all_saved_states = json.loads(state_file.read_text(encoding="utf-8"))
+            if not isinstance(all_saved_states, dict):
+                all_saved_states = {}
+            accounts_state = all_saved_states.get("accounts", {})
+            saved_state = accounts_state.get(authenticated_username, {}) if isinstance(accounts_state, dict) else {}
             xp = int(saved_state.get("xp", xp))
             recycled = int(saved_state.get("recycled", recycled))
             active_spot_filter = saved_state.get("filter", active_spot_filter)
@@ -3248,8 +3254,21 @@ def recovery_go_app(page: ft.Page) -> None:
                                       "visit_count": int(spot.get("visit_count", 0))} for spot in spots},
         }
         try:
-            state_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        except OSError:
+            if authenticated_username:
+                with CONTENT_STORAGE_LOCK:
+                    try:
+                        all_saved_states = json.loads(state_file.read_text(encoding="utf-8")) if state_file.exists() else {}
+                    except (OSError, json.JSONDecodeError):
+                        all_saved_states = {}
+                    accounts_state = all_saved_states.get("accounts")
+                    if not isinstance(accounts_state, dict):
+                        accounts_state = {}
+                    accounts_state[authenticated_username] = payload
+                    state_file.write_text(
+                        json.dumps({"accounts": accounts_state}, ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
+        except (OSError, TypeError):
             pass
         try:
             if authenticated_username:
@@ -3857,10 +3876,11 @@ def recovery_go_app(page: ft.Page) -> None:
             refresh_distances()
             save_app_state()
             try:
-                data_file.write_text(
-                    json.dumps([spot for spot in spots if spot.get("user_added")], ensure_ascii=False, indent=2),
-                    encoding="utf-8",
-                )
+                with CONTENT_STORAGE_LOCK:
+                    data_file.write_text(
+                        json.dumps([spot for spot in spots if spot.get("user_added")], ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
                 announce_content_change()
             except OSError:
                 toast("追加しましたが、端末への保存に失敗しました")
@@ -4220,13 +4240,28 @@ def recovery_go_app(page: ft.Page) -> None:
                                password=True, can_reveal_password=True, visible=register_mode)
         error = ft.Text(color="#FF7A8A", size=11)
 
+        def refresh_user_accounts() -> None:
+            try:
+                with CONTENT_STORAGE_LOCK:
+                    latest_accounts = json.loads(users_file.read_text(encoding="utf-8")) if users_file.exists() else {}
+                if isinstance(latest_accounts, dict):
+                    user_accounts.clear()
+                    user_accounts.update(latest_accounts)
+            except (OSError, json.JSONDecodeError):
+                pass
+
         def submit(event: ft.ControlEvent | None = None) -> None:
             key = (username.value or "").strip().lower()
             secret = password.value or ""
-            if len(key) < 3 or not key.replace("_", "").isalnum():
+            valid_user_id = len(key) >= 3 and all(
+                character.isascii() and (character.isalnum() or character == "_")
+                for character in key
+            )
+            if not valid_user_id:
                 error.value = "ユーザーIDは英数字と_で3文字以上にしてください"
                 page.update()
                 return
+            refresh_user_accounts()
             if register_mode:
                 if key in user_accounts:
                     error.value = "このユーザーIDは使用されています"
@@ -4240,7 +4275,7 @@ def recovery_go_app(page: ft.Page) -> None:
                     user_accounts[key] = {"display_name": (display_name.value or key).strip(),
                                           "salt": salt, "password_hash": digest}
                     try:
-                        with ONLINE_USERS_LOCK:
+                        with CONTENT_STORAGE_LOCK:
                             users_file.write_text(json.dumps(user_accounts, ensure_ascii=False, indent=2), encoding="utf-8")
                     except OSError:
                         error.value = "アカウントを保存できませんでした"
