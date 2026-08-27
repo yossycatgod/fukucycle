@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+m3ow_users.json
+m3ow_state.json
+collection_points.json
+urban_mine_columns.json
+.DS_Store
+submission/*.zip
