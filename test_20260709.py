@@ -3070,10 +3070,10 @@ def recovery_go_app(page: ft.Page) -> None:
 
     page.title = "fukucycle"
     page.theme_mode = ft.ThemeMode.DARK
-    page.bgcolor = "#07110F"
+    page.bgcolor = "#120D0B"
     page.padding = 0
     page.theme = ft.Theme(
-        color_scheme_seed="#62F6B5",
+        color_scheme_seed="#D6A06C",
         visual_density=ft.VisualDensity.COMFORTABLE,
     )
     try:
@@ -3097,7 +3097,7 @@ def recovery_go_app(page: ft.Page) -> None:
         authenticated_username = None
 
     spots = [
-        {"name": "丸の内リサイクルポート", "kind": "小型家電", "lat": 35.6798, "lon": 139.7638, "distance": 0, "x": .23, "y": .27, "color": "#62F6B5", "visited": False, "xp": 80},
+        {"name": "丸の内リサイクルポート", "kind": "小型家電", "lat": 35.6798, "lon": 139.7638, "distance": 0, "x": .23, "y": .27, "color": "#D6A06C", "visited": False, "xp": 80},
         {"name": "京橋バッテリーステーション", "kind": "バッテリー", "lat": 35.6768, "lon": 139.7701, "distance": 0, "x": .70, "y": .22, "color": "#FFD86B", "visited": False, "xp": 120},
         {"name": "有楽町デバイス回収所", "kind": "スマホ・PC", "lat": 35.6751, "lon": 139.7634, "distance": 0, "x": .72, "y": .57, "color": "#73D7FF", "visited": True, "xp": 100},
         {"name": "日本橋リユースラボ", "kind": "ゲーム機", "lat": 35.6825, "lon": 139.7744, "distance": 0, "x": .18, "y": .63, "color": "#BFA5FF", "visited": False, "xp": 150},
@@ -3129,9 +3129,8 @@ def recovery_go_app(page: ft.Page) -> None:
                 community_columns = [item for item in saved_columns if isinstance(item, dict)]
         except (OSError, json.JSONDecodeError):
             pass
-    level = 4
-    xp = 720
-    recycled = 12
+    xp = 0
+    recycled = 0
     selected_spot: dict | None = None
     active_tab = "map"
     active_spot_filter = "すべて"
@@ -3140,15 +3139,18 @@ def recovery_go_app(page: ft.Page) -> None:
                if authenticated_username else uuid.uuid4().hex[:8])
     user_name = (user_accounts.get(authenticated_username, {}).get("display_name")
                  if authenticated_username else None) or f"Explorer {user_id[:4].upper()}"
-    user_color = ["#FF7A8A", "#73D7FF", "#FFD86B", "#BFA5FF", "#62F6B5"][int(user_id[:2], 16) % 5]
+    user_color = ["#FF7A8A", "#73D7FF", "#FFD86B", "#BFA5FF", "#D6A06C"][int(user_id[:2], 16) % 5]
     sharing_location = False
     presence_signature = ""
     last_content_revision = SERVER_CONTENT_REVISION
     session_active = True
     presence_thread_started = False
-    online_count_text = ft.Text("1 ONLINE", size=9, color="#62F6B5", weight=ft.FontWeight.BOLD)
+    online_count_text = ft.Text("1 ONLINE", size=9, color="#D6A06C", weight=ft.FontWeight.BOLD)
     sheet = ft.Container()
     root = ft.Stack(expand=True)
+
+    def current_level() -> int:
+        return xp // 1000
 
     if state_file.exists():
         try:
@@ -3182,7 +3184,7 @@ def recovery_go_app(page: ft.Page) -> None:
                 spot["visit_count"] = int(state.get("visit_count", spot.get("visit_count", 0)))
     except Exception:
         pass
-    user_color = ["#FF7A8A", "#73D7FF", "#FFD86B", "#BFA5FF", "#62F6B5"][int(user_id[:2], 16) % 5]
+    user_color = ["#FF7A8A", "#73D7FF", "#FFD86B", "#BFA5FF", "#D6A06C"][int(user_id[:2], 16) % 5]
 
     def save_app_state() -> None:
         payload = {
@@ -3303,7 +3305,7 @@ def recovery_go_app(page: ft.Page) -> None:
                 ft.Icon(ft.Icons.ARROW_UPWARD, size=19 if compact else 24, color="#73D7FF",
                         rotate=ft.Rotate(math.radians(bearing))),
                 ft.Column([
-                    ft.Text(compass_name(bearing), size=10, color="#9AABA3"),
+                    ft.Text(compass_name(bearing), size=10, color="#BCAEA4"),
                     ft.Text(format_distance(int(spot["distance"])), size=12 if compact else 15,
                             weight=ft.FontWeight.BOLD),
                 ], spacing=0),
@@ -3326,8 +3328,8 @@ def recovery_go_app(page: ft.Page) -> None:
 
     def toast(message: str) -> None:
         page.snack_bar = ft.SnackBar(
-            content=ft.Row([ft.Icon(ft.Icons.AUTO_AWESOME, color="#62F6B5"), ft.Text(message, weight=ft.FontWeight.BOLD)]),
-            bgcolor="#17241F",
+            content=ft.Row([ft.Icon(ft.Icons.AUTO_AWESOME, color="#D6A06C"), ft.Text(message, weight=ft.FontWeight.BOLD)]),
+            bgcolor="#2B1D17",
             behavior=ft.SnackBarBehavior.FLOATING,
             margin=20,
         )
@@ -3382,10 +3384,10 @@ def recovery_go_app(page: ft.Page) -> None:
                     found = json.loads(response.read().decode("utf-8"))
                 results.controls = [
                     ft.Container(
-                        content=ft.Row([ft.Icon(ft.Icons.PLACE, color="#62F6B5"),
+                        content=ft.Row([ft.Icon(ft.Icons.PLACE, color="#D6A06C"),
                                         ft.Text(item["display_name"], size=12, expand=True),
                                         ft.Icon(ft.Icons.CHEVRON_RIGHT)], spacing=8),
-                        padding=12, bgcolor="#17241F", border_radius=14,
+                        padding=12, bgcolor="#2B1D17", border_radius=14,
                         on_click=lambda e, value=item: choose_result(value),
                     ) for item in found
                 ] or [ft.Text("該当する場所がありません")]
@@ -3443,16 +3445,16 @@ def recovery_go_app(page: ft.Page) -> None:
     def show_profile(event: ft.ControlEvent | None = None) -> None:
         name_field = ft.TextField(label="表示名", value=user_name, dense=True)
         share_switch = ft.Switch(label="地図上で位置を共有", value=sharing_location,
-                                 active_color="#62F6B5")
+                                 active_color="#D6A06C")
         dialog = ft.AlertDialog(
             title=ft.Text("マイプロフィール"),
-            content=ft.Column([ft.Icon(ft.Icons.ECO, size=54, color="#62F6B5"),
-                               ft.Text(f"LEVEL {level}", size=22, weight=ft.FontWeight.BOLD),
-                               ft.Text(f"{xp} XP・回収 {recycled}件", color="#9AABA3"),
+            content=ft.Column([ft.Icon(ft.Icons.ECO, size=54, color="#D6A06C"),
+                               ft.Text(f"LEVEL {current_level()}", size=22, weight=ft.FontWeight.BOLD),
+                               ft.Text(f"{xp} XP・回収 {recycled}件", color="#BCAEA4"),
                                name_field,
                                share_switch,
                                ft.Text("共有中は同じサーバーに接続したユーザーへ概算位置が表示されます。",
-                                       size=10, color="#9AABA3")],
+                                       size=10, color="#BCAEA4")],
                               horizontal_alignment=ft.CrossAxisAlignment.CENTER, tight=True),
             actions=[],
         )
@@ -3489,7 +3491,7 @@ def recovery_go_app(page: ft.Page) -> None:
         return ft.Container(
             content=content,
             padding=padding,
-            bgcolor=ft.Colors.with_opacity(.88, "#13201B"),
+            bgcolor=ft.Colors.with_opacity(.88, "#241813"),
             border=ft.border.all(1, ft.Colors.with_opacity(.10, ft.Colors.WHITE)),
             border_radius=radius,
             shadow=ft.BoxShadow(blur_radius=28, color=ft.Colors.with_opacity(.32, ft.Colors.BLACK), offset=ft.Offset(0, 12)),
@@ -3567,16 +3569,16 @@ def recovery_go_app(page: ft.Page) -> None:
                     ft.Container(width=54, height=54, bgcolor=ft.Colors.with_opacity(.18, spot["color"]), border_radius=27),
                     ft.Container(
                         left=7, top=7, width=40, height=40,
-                        content=ft.Icon(ft.Icons.RECYCLING, color="#07110F", size=21),
+                        content=ft.Icon(ft.Icons.RECYCLING, color="#120D0B", size=21),
                         alignment=ft.alignment.center,
                         bgcolor=spot["color"],
-                        border=ft.border.all(3, "#EFFFF8" if near else "#23342D"),
+                        border=ft.border.all(3, "#FFF9F1" if near else "#23342D"),
                         border_radius=20,
                         shadow=ft.BoxShadow(blur_radius=18 if near else 8, color=ft.Colors.with_opacity(.55, spot["color"])),
                     ),
                     ft.Container(
                         left=35, top=1, width=15, height=15,
-                        bgcolor="#62F6B5" if checked_in_today(spot) else "#FF6D7A",
+                        bgcolor="#D6A06C" if checked_in_today(spot) else "#FF6D7A",
                         border=ft.border.all(2, "#10201A"),
                         border_radius=8,
                     ),
@@ -3585,11 +3587,11 @@ def recovery_go_app(page: ft.Page) -> None:
                     content=ft.Row([
                         ft.Icon(ft.Icons.ARROW_UPWARD, size=16, color="#73D7FF",
                                 rotate=ft.Rotate(math.radians(bearing))),
-                        ft.Text(compass_name(bearing), size=9, color="#9AABA3"),
+                        ft.Text(compass_name(bearing), size=9, color="#BCAEA4"),
                         ft.Text(format_distance(int(spot["distance"])), size=10, weight=ft.FontWeight.BOLD),
                     ], spacing=3),
                     padding=ft.padding.symmetric(horizontal=7, vertical=4),
-                    bgcolor=ft.Colors.with_opacity(.94, "#13201B"),
+                    bgcolor=ft.Colors.with_opacity(.94, "#241813"),
                     border=ft.border.all(1, ft.Colors.with_opacity(.16, ft.Colors.WHITE)),
                     border_radius=12,
                     shadow=ft.BoxShadow(blur_radius=8, color="#44000000"),
@@ -3650,7 +3652,7 @@ def recovery_go_app(page: ft.Page) -> None:
                                      border_radius=22, shadow=ft.BoxShadow(blur_radius=14, color="#55000000")),
                         ft.Container(content=ft.Text(online_user["name"], size=9, weight=ft.FontWeight.BOLD),
                                      padding=ft.padding.symmetric(horizontal=6, vertical=2),
-                                     bgcolor=ft.Colors.with_opacity(.92, "#13201B"), border_radius=8),
+                                     bgcolor=ft.Colors.with_opacity(.92, "#241813"), border_radius=8),
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=-2),
                     tooltip=f"オンライン: {online_user['name']}",
                 ))
@@ -3672,12 +3674,12 @@ def recovery_go_app(page: ft.Page) -> None:
             content=glass(
                 ft.Row(
                     [
-                        ft.Container(content=ft.Text(str(level), size=18, weight=ft.FontWeight.BOLD, color="#07110F"), width=44, height=44, alignment=ft.alignment.center, bgcolor="#62F6B5", border_radius=14),
-                        ft.Column([ft.Row([ft.Text("LEVEL 4", size=10, color="#9AABA3"), online_count_text,
-                                          ft.Text(f"{xp} XP", size=10, color="#62F6B5")], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                                   ft.ProgressBar(value=progress, color="#62F6B5", bgcolor="#2B3B34", bar_height=6),
+                        ft.Container(content=ft.Text(str(current_level()), size=18, weight=ft.FontWeight.BOLD, color="#120D0B"), width=44, height=44, alignment=ft.alignment.center, bgcolor="#D6A06C", border_radius=14),
+                        ft.Column([ft.Row([ft.Text(f"LEVEL {current_level()}", size=10, color="#BCAEA4"), online_count_text,
+                                          ft.Text(f"{xp} XP", size=10, color="#D6A06C")], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                                   ft.ProgressBar(value=progress, color="#D6A06C", bgcolor="#4A352C", bar_height=6),
                                    location_label], spacing=5, expand=True),
-                        ft.Container(content=ft.IconButton(icon=ft.Icons.PERSON, icon_color="#DFF8ED", on_click=show_profile), bgcolor="#24342D", border_radius=14),
+                        ft.Container(content=ft.IconButton(icon=ft.Icons.PERSON, icon_color="#FFF9F1", on_click=show_profile), bgcolor="#24342D", border_radius=14),
                     ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER
                 ), padding=12, radius=20
             ),
@@ -3692,14 +3694,14 @@ def recovery_go_app(page: ft.Page) -> None:
         current_map_url = f"https://www.openstreetmap.org/?mlat={current_position['lat']:.6f}&mlon={current_position['lon']:.6f}#map={map_zoom}/{current_position['lat']:.6f}/{current_position['lon']:.6f}"
         return [
             ft.Container(right=16, top=106, content=glass(ft.IconButton(icon=ft.Icons.MY_LOCATION, icon_color="#73D7FF", tooltip="現在地を取得", on_click=locate_me), 2, 16)),
-            ft.Container(right=16, top=166, content=glass(ft.IconButton(icon=ft.Icons.ADD_LOCATION_ALT, icon_color="#62F6B5", tooltip="スポットを追加", on_click=show_add_spot), 2, 16)),
-            ft.Container(right=16, top=226, content=glass(ft.IconButton(icon=ft.Icons.OPEN_IN_NEW, icon_color="#DFF8ED", tooltip="地図を大きく開く", on_click=lambda e: page.launch_url(current_map_url)), 2, 16)),
+            ft.Container(right=16, top=166, content=glass(ft.IconButton(icon=ft.Icons.ADD_LOCATION_ALT, icon_color="#D6A06C", tooltip="スポットを追加", on_click=show_add_spot), 2, 16)),
+            ft.Container(right=16, top=226, content=glass(ft.IconButton(icon=ft.Icons.OPEN_IN_NEW, icon_color="#FFF9F1", tooltip="地図を大きく開く", on_click=lambda e: page.launch_url(current_map_url)), 2, 16)),
             ft.Container(right=16, top=286, content=glass(ft.Column([
-                ft.IconButton(icon=ft.Icons.ADD, icon_color="#DFF8ED", tooltip="拡大", on_click=lambda e: change_zoom(1)),
+                ft.IconButton(icon=ft.Icons.ADD, icon_color="#FFF9F1", tooltip="拡大", on_click=lambda e: change_zoom(1)),
                 ft.Container(height=1, width=30, bgcolor="#34483F"),
-                ft.IconButton(icon=ft.Icons.REMOVE, icon_color="#DFF8ED", tooltip="縮小", on_click=lambda e: change_zoom(-1)),
+                ft.IconButton(icon=ft.Icons.REMOVE, icon_color="#FFF9F1", tooltip="縮小", on_click=lambda e: change_zoom(-1)),
             ], spacing=0), 2, 16)),
-            ft.Container(left=16, top=108, content=ft.Container(content=ft.Row([ft.Icon(ft.Icons.SEARCH, size=15, color="#62F6B5"), ft.Text("場所を検索", size=10, weight=ft.FontWeight.BOLD)], spacing=7), padding=ft.padding.symmetric(horizontal=12, vertical=8), bgcolor=ft.Colors.with_opacity(.85, "#13201B"), border_radius=20, on_click=search_places)),
+            ft.Container(left=16, top=108, content=ft.Container(content=ft.Row([ft.Icon(ft.Icons.SEARCH, size=15, color="#D6A06C"), ft.Text("場所を検索", size=10, weight=ft.FontWeight.BOLD)], spacing=7), padding=ft.padding.symmetric(horizontal=12, vertical=8), bgcolor=ft.Colors.with_opacity(.85, "#241813"), border_radius=20, on_click=search_places)),
         ]
 
     def map_filter_bar(width: int) -> ft.Container:
@@ -3710,12 +3712,12 @@ def recovery_go_app(page: ft.Page) -> None:
             chips.append(ft.Container(
                 content=ft.Row([
                     ft.Icon(ft.Icons.FAVORITE if value == "お気に入り" else ft.Icons.CIRCLE,
-                            size=11, color="#07110F" if selected else "#62F6B5"),
+                            size=11, color="#120D0B" if selected else "#D6A06C"),
                     ft.Text(value, size=10, weight=ft.FontWeight.BOLD,
-                            color="#07110F" if selected else "#DFF8ED"),
+                            color="#120D0B" if selected else "#FFF9F1"),
                 ], spacing=5),
                 padding=ft.padding.symmetric(horizontal=11, vertical=8),
-                bgcolor="#62F6B5" if selected else ft.Colors.with_opacity(.90, "#13201B"),
+                bgcolor="#D6A06C" if selected else ft.Colors.with_opacity(.90, "#241813"),
                 border_radius=18,
                 on_click=lambda e, choice=value: set_spot_filter(choice),
             ))
@@ -3726,11 +3728,11 @@ def recovery_go_app(page: ft.Page) -> None:
         return ft.Container(
             left=width / 2 - 34, bottom=88,
             content=ft.Container(
-                content=ft.IconButton(ft.Icons.RADAR, icon_color="#07110F", icon_size=30,
+                content=ft.IconButton(ft.Icons.RADAR, icon_color="#120D0B", icon_size=30,
                                       tooltip="周辺をスキャン", on_click=scan_nearby),
                 width=68, height=68, alignment=ft.alignment.center,
-                bgcolor="#62F6B5", border=ft.border.all(5, ft.Colors.WHITE), border_radius=34,
-                shadow=ft.BoxShadow(blur_radius=24, color=ft.Colors.with_opacity(.55, "#18A66A"), offset=ft.Offset(0, 8)),
+                bgcolor="#D6A06C", border=ft.border.all(5, ft.Colors.WHITE), border_radius=34,
+                shadow=ft.BoxShadow(blur_radius=24, color=ft.Colors.with_opacity(.55, "#A65E2E"), offset=ft.Offset(0, 8)),
                 animate_scale=220,
             ),
         )
@@ -3747,7 +3749,7 @@ def recovery_go_app(page: ft.Page) -> None:
             content=glass(
                 ft.Column(
                     [
-                        ft.Row([ft.Container(width=46, height=46, content=ft.Icon(ft.Icons.RECYCLING, color="#07110F"), alignment=ft.alignment.center, bgcolor=selected_spot["color"], border_radius=15),
+                        ft.Row([ft.Container(width=46, height=46, content=ft.Icon(ft.Icons.RECYCLING, color="#120D0B"), alignment=ft.alignment.center, bgcolor=selected_spot["color"], border_radius=15),
                                 ft.Column([ft.Text(selected_spot["kind"], size=10, color=selected_spot["color"], weight=ft.FontWeight.BOLD),
                                            ft.Text(selected_spot["name"], size=17, weight=ft.FontWeight.BOLD)], spacing=1, expand=True),
                                 ft.IconButton(icon=ft.Icons.FAVORITE if selected_spot.get("favorite") else ft.Icons.FAVORITE_BORDER,
@@ -3758,11 +3760,11 @@ def recovery_go_app(page: ft.Page) -> None:
                                 ft.Icon(ft.Icons.BOLT, size=17, color="#FFD86B"),
                                 ft.Text(f"+{selected_spot['xp']} XP", size=12, color="#FFD86B", weight=ft.FontWeight.BOLD)],
                                spacing=6, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                        ft.Row([ft.Icon(ft.Icons.CALENDAR_TODAY, size=15, color="#62F6B5"),
+                        ft.Row([ft.Icon(ft.Icons.CALENDAR_TODAY, size=15, color="#D6A06C"),
                                 ft.Text("本日チェックイン済み" if daily_done else "本日のチェックインが可能",
-                                        size=11, color="#62F6B5" if daily_done else "#DFF8ED"),
+                                        size=11, color="#D6A06C" if daily_done else "#FFF9F1"),
                                 ft.Container(expand=True),
-                                ft.Text(f"累計 {int(selected_spot.get('visit_count', 0))}回", size=11, color="#9AABA3")], spacing=6),
+                                ft.Text(f"累計 {int(selected_spot.get('visit_count', 0))}回", size=11, color="#BCAEA4")], spacing=6),
                         ft.Row([
                             ft.OutlinedButton("経路", icon=ft.Icons.DIRECTIONS,
                                               on_click=lambda e: open_directions(selected_spot), expand=True),
@@ -3773,7 +3775,7 @@ def recovery_go_app(page: ft.Page) -> None:
                                         icon=ft.Icons.CHECK_CIRCLE if daily_done else ft.Icons.RADAR,
                                         disabled=not near or daily_done, on_click=visit_spot,
                                         width=width - 56, height=48,
-                                        style=ft.ButtonStyle(bgcolor="#62F6B5", color="#07110F", shape=ft.RoundedRectangleBorder(radius=15))),
+                                        style=ft.ButtonStyle(bgcolor="#D6A06C", color="#120D0B", shape=ft.RoundedRectangleBorder(radius=15))),
                     ], spacing=12
                 ), padding=16, radius=26
             ),
@@ -3782,7 +3784,7 @@ def recovery_go_app(page: ft.Page) -> None:
     def show_add_spot(event: ft.ControlEvent | None = None) -> None:
         name = ft.TextField(label="スポット名", prefix_icon=ft.Icons.RECYCLING, autofocus=True)
         kind = ft.Dropdown(label="回収できるもの", value="小型家電", options=[ft.dropdown.Option(v) for v in ["小型家電", "スマホ・PC", "バッテリー", "ゲーム機"]])
-        dialog = ft.AlertDialog(modal=True, title=ft.Text("新しいスポットを発見"), content=ft.Column([ft.Text("取得した現在地の緯度・経度と一緒に登録します。", color="#9AABA3"), ft.Text(location_label.value, size=12, color="#62F6B5"), name, kind], width=min(360, dimensions()[0] - 64), tight=True), actions=[])
+        dialog = ft.AlertDialog(modal=True, title=ft.Text("新しいスポットを発見"), content=ft.Column([ft.Text("取得した現在地の緯度・経度と一緒に登録します。", color="#BCAEA4"), ft.Text(location_label.value, size=12, color="#D6A06C"), name, kind], width=min(360, dimensions()[0] - 64), tight=True), actions=[])
 
         def save(event: ft.ControlEvent) -> None:
             if not (name.value or "").strip():
@@ -3791,7 +3793,7 @@ def recovery_go_app(page: ft.Page) -> None:
                 return
             new_spot = {"name": name.value.strip(), "kind": kind.value,
                         "lat": current_position["lat"], "lon": current_position["lon"],
-                        "distance": 0, "x": .56, "y": .39, "color": "#62F6B5",
+                        "distance": 0, "x": .56, "y": .39, "color": "#D6A06C",
                         "visited": False, "xp": 100, "user_added": True}
             spots.append(new_spot)
             refresh_distances()
@@ -3822,8 +3824,8 @@ def recovery_go_app(page: ft.Page) -> None:
             bottom=12,
             width=width - 24,
             height=66,
-            content=ft.Row([ft.Container(content=ft.Column([ft.Icon(icon, size=22, color="#62F6B5" if active_tab == key else "#788A82"), ft.Text(label, size=9, color="#62F6B5" if active_tab == key else "#788A82")], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.CENTER), expand=True, alignment=ft.alignment.center, on_click=lambda e, k=key: change_tab(k)) for key, icon, label in items], alignment=ft.MainAxisAlignment.SPACE_AROUND),
-            bgcolor=ft.Colors.with_opacity(.94, "#101C17"),
+            content=ft.Row([ft.Container(content=ft.Column([ft.Icon(icon, size=22, color="#D6A06C" if active_tab == key else "#9B8A80"), ft.Text(label, size=9, color="#D6A06C" if active_tab == key else "#9B8A80")], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.CENTER), expand=True, alignment=ft.alignment.center, on_click=lambda e, k=key: change_tab(k)) for key, icon, label in items], alignment=ft.MainAxisAlignment.SPACE_AROUND),
+            bgcolor=ft.Colors.with_opacity(.94, "#201511"),
             border=ft.border.all(1, ft.Colors.with_opacity(.12, ft.Colors.WHITE)),
             border_radius=24,
             shadow=ft.BoxShadow(blur_radius=30, color=ft.Colors.with_opacity(.45, ft.Colors.BLACK), offset=ft.Offset(0, 12)),
@@ -3843,23 +3845,23 @@ def recovery_go_app(page: ft.Page) -> None:
         for spot in sorted(matches, key=lambda item: item["distance"]):
             cards.append(ft.Container(
                 content=ft.Row([
-                    ft.Container(content=ft.Icon(ft.Icons.RECYCLING, color="#07110F"), width=44, height=44,
+                    ft.Container(content=ft.Icon(ft.Icons.RECYCLING, color="#120D0B"), width=44, height=44,
                                  alignment=ft.alignment.center, bgcolor=spot["color"], border_radius=14),
                     ft.Column([ft.Text(spot["name"], weight=ft.FontWeight.BOLD),
-                               ft.Text(spot["kind"], size=11, color="#9AABA3")], expand=True, spacing=3),
+                               ft.Text(spot["kind"], size=11, color="#BCAEA4")], expand=True, spacing=3),
                     direction_indicator(spot, compact=True),
                     ft.Icon(ft.Icons.FAVORITE, color="#FF7A8A", size=16, visible=bool(spot.get("favorite"))),
-                    ft.Icon(ft.Icons.CHEVRON_RIGHT, color="#788A82", size=18),
+                    ft.Icon(ft.Icons.CHEVRON_RIGHT, color="#9B8A80", size=18),
                 ], vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=9),
-                padding=12, bgcolor="#14221C", border=ft.border.all(1, "#20372D"), border_radius=18,
+                padding=12, bgcolor="#2B1D17", border=ft.border.all(1, "#4B342A"), border_radius=18,
                 on_click=lambda e, s=spot: open_spot(s)))
         if not cards:
             cards = [ft.Container(
-                content=ft.Column([ft.Icon(ft.Icons.SEARCH_OFF, size=38, color="#788A82"),
+                content=ft.Column([ft.Icon(ft.Icons.SEARCH_OFF, size=38, color="#9B8A80"),
                                    ft.Text("条件に合うスポットがありません", weight=ft.FontWeight.BOLD),
-                                   ft.Text("検索語やフィルターを変えてみてください", size=11, color="#9AABA3")],
+                                   ft.Text("検索語やフィルターを変えてみてください", size=11, color="#BCAEA4")],
                                   horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=7),
-                height=150, alignment=ft.alignment.center, bgcolor="#101C17", border_radius=18,
+                height=150, alignment=ft.alignment.center, bgcolor="#201511", border_radius=18,
             )]
         nearest = min((spot["distance"] for spot in matches), default=0)
         search_field = ft.TextField(
@@ -3873,12 +3875,12 @@ def recovery_go_app(page: ft.Page) -> None:
             render()
 
         search_field.on_submit = apply_nearby_search
-        return [ft.Container(width=width, height=height, bgcolor="#07110F"),
+        return [ft.Container(width=width, height=height, bgcolor="#120D0B"),
                 ft.Container(left=20, top=30, width=width - 40, height=height - 112,
                              content=ft.Column([
                                  ft.Row([ft.Text("近くのスポット", size=28, weight=ft.FontWeight.BOLD, expand=True),
                                          ft.IconButton(ft.Icons.REFRESH, tooltip="現在地と距離を更新", on_click=locate_me)]),
-                                 ft.Text(f"{len(matches)}件・最寄りまで {format_distance(nearest)}" if matches else "0件", color="#9AABA3"),
+                                 ft.Text(f"{len(matches)}件・最寄りまで {format_distance(nearest)}" if matches else "0件", color="#BCAEA4"),
                                  ft.Row([search_field, ft.IconButton(ft.Icons.SEARCH, tooltip="検索", on_click=apply_nearby_search)], spacing=5),
                                  ft.Column(cards, spacing=10, scroll=ft.ScrollMode.AUTO, expand=True),
                              ], spacing=12))]
@@ -3900,31 +3902,31 @@ def recovery_go_app(page: ft.Page) -> None:
             device_cards.append(
                 ft.Container(
                     content=ft.Column([
-                        ft.Row([ft.Container(ft.Icon(device["icon"], color="#07110F"), width=44, height=44,
+                        ft.Row([ft.Container(ft.Icon(device["icon"], color="#120D0B"), width=44, height=44,
                                              alignment=ft.alignment.center, bgcolor=device["color"], border_radius=14),
                                 ft.Column([ft.Text(device["name"], weight=ft.FontWeight.BOLD),
-                                           ft.Text(f"推定貴金属量 {total:.3f} g", size=11, color="#9AABA3")], spacing=3, expand=True)], spacing=10),
+                                           ft.Text(f"推定貴金属量 {total:.3f} g", size=11, color="#BCAEA4")], spacing=3, expand=True)], spacing=10),
                         bars,
                         ft.Row([ft.Text("Au 金", size=10, color="#FFD86B"), ft.Text("Ag 銀", size=10, color="#B9C5CB"),
-                                ft.Text("Pd パラジウム", size=10, color="#62F6B5")], spacing=12),
+                                ft.Text("Pd パラジウム", size=10, color="#D6A06C")], spacing=12),
                     ], spacing=10),
-                    padding=14, bgcolor="#14221C", border_radius=18,
+                    padding=14, bgcolor="#2B1D17", border_radius=18,
                     on_click=lambda e, k=key: toast(f"{DEVICE_LIBRARY[k]['name']}を素材ラボに追加しました"),
                 )
             )
         return [
-            ft.Container(width=width, height=height, bgcolor="#07110F"),
+            ft.Container(width=width, height=height, bgcolor="#120D0B"),
             ft.Container(left=20, top=26, width=width - 40, height=height - 110,
                          content=ft.Column([
                              ft.Text("素材ラボ", size=28, weight=ft.FontWeight.BOLD),
-                             ft.Text("元の都市鉱山シミュレーション", color="#9AABA3"),
+                             ft.Text("元の都市鉱山シミュレーション", color="#BCAEA4"),
                              glass(ft.Column([
                                  ft.Row([ft.Icon(ft.Icons.WATER_DROP, color="#73D7FF", size=34),
                                          ft.Column([ft.Text("デバイスを素材へ戻す", weight=ft.FontWeight.BOLD),
-                                                    ft.Text("製品ごとの貴金属量を比較できます", size=11, color="#9AABA3")], expand=True)], spacing=12),
+                                                    ft.Text("製品ごとの貴金属量を比較できます", size=11, color="#BCAEA4")], expand=True)], spacing=12),
                                  ft.FilledButton("元のフルシミュレーションを開く", icon=ft.Icons.PLAY_ARROW,
                                                  on_click=open_full_lab, width=width - 76,
-                                                 style=ft.ButtonStyle(bgcolor="#62F6B5", color="#07110F")),
+                                                 style=ft.ButtonStyle(bgcolor="#D6A06C", color="#120D0B")),
                              ], spacing=12)),
                              ft.Column(device_cards, spacing=10, scroll=ft.ScrollMode.AUTO, expand=True),
                          ], spacing=12)),
@@ -3948,15 +3950,15 @@ def recovery_go_app(page: ft.Page) -> None:
 
         like_button = ft.OutlinedButton(str(column.get("likes", 0)), icon=ft.Icons.FAVORITE_BORDER, on_click=like)
         dialog.title = ft.Column([
-            ft.Row([ft.Container(ft.Text(column.get("category", "その他"), size=10, color="#62F6B5", weight=ft.FontWeight.BOLD),
-                                 padding=ft.padding.symmetric(horizontal=9, vertical=4), bgcolor="#183A2C", border_radius=14),
-                    ft.Text(f"by {column.get('author', '匿名')}", size=11, color="#9AABA3")], spacing=8),
+            ft.Row([ft.Container(ft.Text(column.get("category", "その他"), size=10, color="#D6A06C", weight=ft.FontWeight.BOLD),
+                                 padding=ft.padding.symmetric(horizontal=9, vertical=4), bgcolor="#4A2E20", border_radius=14),
+                    ft.Text(f"by {column.get('author', '匿名')}", size=11, color="#BCAEA4")], spacing=8),
             ft.Text(column.get("title", "無題"), size=22, weight=ft.FontWeight.BOLD),
         ], spacing=8)
         dialog.content = ft.Container(
             ft.Column([ft.Text(column.get("body", ""), size=14),
                        ft.Divider(),
-                       ft.Text("役に立ったらハートを送ろう", size=11, color="#9AABA3")],
+                       ft.Text("役に立ったらハートを送ろう", size=11, color="#BCAEA4")],
                       tight=True, spacing=14),
             width=min(460, dimensions()[0] - 64),
         )
@@ -3987,7 +3989,7 @@ def recovery_go_app(page: ft.Page) -> None:
             render()
 
         dialog.content = ft.Container(ft.Column([title, author, category, body,
-                                                   ft.Text("投稿内容はこの端末のコミュニティ一覧に保存されます。", size=10, color="#9AABA3")],
+                                                   ft.Text("投稿内容はこの端末のコミュニティ一覧に保存されます。", size=10, color="#BCAEA4")],
                                                   tight=True, spacing=12), width=min(480, dimensions()[0] - 64))
         dialog.actions = [ft.TextButton("キャンセル", on_click=lambda e: setattr(dialog, "open", False) or page.update()),
                           ft.FilledButton("公開する", icon=ft.Icons.PUBLISH, on_click=publish)]
@@ -3997,49 +3999,49 @@ def recovery_go_app(page: ft.Page) -> None:
 
     def learn_screen(width: int, height: int) -> list[ft.Control]:
         lessons = [
-            ("都市鉱山とは？", "使われなくなった電子機器に眠る金属資源。日本の家庭にも大量の資源が蓄積されています。", ft.Icons.LOCATION_CITY, "#62F6B5"),
+            ("都市鉱山とは？", "使われなくなった電子機器に眠る金属資源。日本の家庭にも大量の資源が蓄積されています。", ft.Icons.LOCATION_CITY, "#D6A06C"),
             ("スマホの中の資源", "金・銀・パラジウムなど、少量でも価値の高い金属が高密度で含まれています。", ft.Icons.PHONE_IPHONE, "#73D7FF"),
             ("なぜ正しく回収する？", "資源循環だけでなく、不適切な廃棄による有害物質や発火事故を防ぎます。", ft.Icons.RECYCLING, "#FFD86B"),
             ("回収前にすること", "データをバックアップして初期化し、SIM・SDカードを取り外します。電池は自治体の案内を確認しましょう。", ft.Icons.SECURITY, "#BFA5FF"),
         ]
         lesson_cards = [
             ft.Container(content=ft.Row([
-                ft.Container(ft.Icon(icon, color="#07110F"), width=48, height=48, alignment=ft.alignment.center, bgcolor=color, border_radius=15),
-                ft.Column([ft.Text(title, size=16, weight=ft.FontWeight.BOLD), ft.Text(body, size=11, color="#A9B7B1")], spacing=5, expand=True),
-            ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.START), padding=15, bgcolor="#14221C", border_radius=19)
+                ft.Container(ft.Icon(icon, color="#120D0B"), width=48, height=48, alignment=ft.alignment.center, bgcolor=color, border_radius=15),
+                ft.Column([ft.Text(title, size=16, weight=ft.FontWeight.BOLD), ft.Text(body, size=11, color="#C8BBB2")], spacing=5, expand=True),
+            ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.START), padding=15, bgcolor="#2B1D17", border_radius=19)
             for title, body, icon, color in lessons
         ]
         column_cards = [
             ft.Container(
                 content=ft.Column([
-                    ft.Row([ft.Container(ft.Text(column.get("category", "その他"), size=9, color="#62F6B5"),
-                                         padding=ft.padding.symmetric(horizontal=8, vertical=3), bgcolor="#183A2C", border_radius=12),
+                    ft.Row([ft.Container(ft.Text(column.get("category", "その他"), size=9, color="#D6A06C"),
+                                         padding=ft.padding.symmetric(horizontal=8, vertical=3), bgcolor="#4A2E20", border_radius=12),
                             ft.Container(expand=True),
                             ft.Icon(ft.Icons.FAVORITE, size=13, color="#FF7A8A"),
-                            ft.Text(str(column.get("likes", 0)), size=10, color="#9AABA3")], spacing=4),
+                            ft.Text(str(column.get("likes", 0)), size=10, color="#BCAEA4")], spacing=4),
                     ft.Text(column.get("title", "無題"), size=16, weight=ft.FontWeight.BOLD),
-                    ft.Text(column.get("body", ""), size=11, color="#A9B7B1", max_lines=2, overflow=ft.TextOverflow.ELLIPSIS),
-                    ft.Text(f"by {column.get('author', '匿名')}", size=10, color="#788A82"),
+                    ft.Text(column.get("body", ""), size=11, color="#C8BBB2", max_lines=2, overflow=ft.TextOverflow.ELLIPSIS),
+                    ft.Text(f"by {column.get('author', '匿名')}", size=10, color="#9B8A80"),
                 ], spacing=7),
-                padding=14, bgcolor="#14221C", border=ft.border.all(1, "#20372D"), border_radius=18,
+                padding=14, bgcolor="#2B1D17", border=ft.border.all(1, "#4B342A"), border_radius=18,
                 on_click=lambda e, item=column: open_column(item),
             ) for column in community_columns
         ]
-        return [ft.Container(width=width, height=height, bgcolor="#07110F"),
+        return [ft.Container(width=width, height=height, bgcolor="#120D0B"),
                 ft.Container(left=20, top=26, width=width - 40, height=height - 110,
                              content=ft.Column([ft.Text("都市鉱山を学ぶ", size=28, weight=ft.FontWeight.BOLD),
-                                                ft.Text("知る・書く・地域で共有する。", color="#9AABA3"),
+                                                ft.Text("知る・書く・地域で共有する。", color="#BCAEA4"),
                                                 ft.Row([ft.Text("基礎ガイド", size=18, weight=ft.FontWeight.BOLD, expand=True),
                                                         ft.FilledButton("コラムを書く", icon=ft.Icons.EDIT, on_click=compose_column,
-                                                                        style=ft.ButtonStyle(bgcolor="#62F6B5", color="#07110F"))]),
+                                                                        style=ft.ButtonStyle(bgcolor="#D6A06C", color="#120D0B"))]),
                                                 ft.Column([*lesson_cards,
                                                            ft.Container(height=8),
                                                            ft.Text("みんなのコラム", size=20, weight=ft.FontWeight.BOLD),
-                                                           ft.Text(f"{len(community_columns)}件の投稿", size=11, color="#9AABA3"),
+                                                           ft.Text(f"{len(community_columns)}件の投稿", size=11, color="#BCAEA4"),
                                                            *column_cards], spacing=11, scroll=ft.ScrollMode.AUTO, expand=True)], spacing=12))]
 
     def bag_screen(width: int, height: int) -> list[ft.Control]:
-        return [ft.Container(width=width, height=height, gradient=ft.LinearGradient(colors=["#0E1D17", "#07110F"])), ft.Container(left=20, top=30, width=width - 40, content=ft.Column([ft.Text("マイバッグ", size=28, weight=ft.FontWeight.BOLD), ft.Text("回収アクティビティ", color="#9AABA3"), ft.Container(height=18), glass(ft.Column([ft.Icon(ft.Icons.EMOJI_EVENTS, color="#FFD86B", size=54), ft.Text(f"LEVEL {level}", size=22, weight=ft.FontWeight.BOLD), ft.Text(f"累計 {xp} XP", color="#9AABA3")], horizontal_alignment=ft.CrossAxisAlignment.CENTER), 24), ft.Row([glass(ft.Column([ft.Text(str(recycled), size=25, weight=ft.FontWeight.BOLD), ft.Text("回収数", size=10, color="#9AABA3")], horizontal_alignment=ft.CrossAxisAlignment.CENTER), 18), glass(ft.Column([ft.Text(str(sum(1 for s in spots if s['visited'])), size=25, weight=ft.FontWeight.BOLD), ft.Text("発見済み", size=10, color="#9AABA3")], horizontal_alignment=ft.CrossAxisAlignment.CENTER), 18)], alignment=ft.MainAxisAlignment.SPACE_EVENLY)], spacing=10))]
+        return [ft.Container(width=width, height=height, gradient=ft.LinearGradient(colors=["#332018", "#120D0B"])), ft.Container(left=20, top=30, width=width - 40, content=ft.Column([ft.Text("マイバッグ", size=28, weight=ft.FontWeight.BOLD), ft.Text("回収アクティビティ", color="#BCAEA4"), ft.Container(height=18), glass(ft.Column([ft.Icon(ft.Icons.EMOJI_EVENTS, color="#FFD86B", size=54), ft.Text(f"LEVEL {current_level()}", size=22, weight=ft.FontWeight.BOLD), ft.Text(f"累計 {xp} XP", color="#BCAEA4")], horizontal_alignment=ft.CrossAxisAlignment.CENTER), 24), ft.Row([glass(ft.Column([ft.Text(str(recycled), size=25, weight=ft.FontWeight.BOLD), ft.Text("回収数", size=10, color="#BCAEA4")], horizontal_alignment=ft.CrossAxisAlignment.CENTER), 18), glass(ft.Column([ft.Text(str(sum(1 for s in spots if s['visited'])), size=25, weight=ft.FontWeight.BOLD), ft.Text("発見済み", size=10, color="#BCAEA4")], horizontal_alignment=ft.CrossAxisAlignment.CENTER), 18)], alignment=ft.MainAxisAlignment.SPACE_EVENLY)], spacing=10))]
 
     def render(event: ft.ControlEvent | None = None) -> None:
         width, height = dimensions()
@@ -4070,12 +4072,19 @@ def recovery_go_app(page: ft.Page) -> None:
         authenticated_username = username
         user_id = hashlib.sha256(username.encode()).hexdigest()[:8]
         user_name = user_accounts[username].get("display_name") or username
-        user_color = ["#FF7A8A", "#73D7FF", "#FFD86B", "#BFA5FF", "#62F6B5"][int(user_id[:2], 16) % 5]
+        user_color = ["#FF7A8A", "#73D7FF", "#FFD86B", "#BFA5FF", "#D6A06C"][int(user_id[:2], 16) % 5]
+        xp = 0
+        recycled = 0
+        for spot in spots:
+            spot["favorite"] = False
+            spot["visited"] = False
+            spot["last_checkin"] = None
+            spot["visit_count"] = 0
         try:
             page.client_storage.set("m3ow.auth_user", username)
             account_state = page.client_storage.get(f"m3ow.user_state.{username}")
             if isinstance(account_state, dict):
-                xp = int(account_state.get("xp", 720))
+                xp = int(account_state.get("xp", 0))
                 recycled = int(account_state.get("recycled", 0))
                 for spot in spots:
                     state = account_state.get("spots", {}).get(spot["name"], {})
@@ -4155,24 +4164,24 @@ def recovery_go_app(page: ft.Page) -> None:
         confirm.on_submit = submit
         auth_card = ft.Container(
             content=ft.Column([
-                ft.Container(ft.Icon(ft.Icons.RECYCLING, size=38, color="#07110F"), width=68, height=68,
-                             alignment=ft.alignment.center, bgcolor="#62F6B5", border_radius=22),
+                ft.Container(ft.Icon(ft.Icons.RECYCLING, size=38, color="#120D0B"), width=68, height=68,
+                             alignment=ft.alignment.center, bgcolor="#D6A06C", border_radius=22),
                 ft.Text("fukucycle", size=32, weight=ft.FontWeight.BOLD),
-                ft.Text("都市鉱山を、みんなの冒険に。", color="#9AABA3"),
+                ft.Text("都市鉱山を、みんなの冒険に。", color="#BCAEA4"),
                 ft.Container(height=8), username, display_name, password, confirm, error,
                 ft.FilledButton("アカウントを作成" if register_mode else "ログイン",
                                 icon=ft.Icons.PERSON_ADD if register_mode else ft.Icons.LOGIN,
                                 width=340, height=50, on_click=submit,
-                                style=ft.ButtonStyle(bgcolor="#62F6B5", color="#07110F")),
+                                style=ft.ButtonStyle(bgcolor="#D6A06C", color="#120D0B")),
                 ft.TextButton("ログインへ戻る" if register_mode else "新規登録",
                               on_click=lambda e: show_auth_screen(not register_mode)),
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=12),
-            width=min(390, dimensions()[0] - 32), padding=24, bgcolor="#13201B",
-            border=ft.border.all(1, "#263B32"), border_radius=28,
+            width=min(390, dimensions()[0] - 32), padding=24, bgcolor="#241813",
+            border=ft.border.all(1, "#50382D"), border_radius=28,
             shadow=ft.BoxShadow(blur_radius=36, color="#66000000", offset=ft.Offset(0, 16)),
         )
         page.add(ft.Container(content=auth_card, expand=True, alignment=ft.alignment.center,
-                              gradient=ft.LinearGradient(colors=["#07110F", "#10271D"])))
+                              gradient=ft.LinearGradient(colors=["#120D0B", "#2C1B14"])))
 
     if authenticated_username:
         start_main_app()
