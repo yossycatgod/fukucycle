@@ -3194,6 +3194,7 @@ def recovery_go_app(page: ft.Page) -> None:
     presence_signature = ""
     last_content_revision = SERVER_CONTENT_REVISION
     session_active = True
+    session_generation = 0
     presence_thread_started = False
     online_count_text = ft.Text("1 ONLINE", size=9, color="#D6A06C", weight=ft.FontWeight.BOLD)
     sheet = ft.Container()
@@ -3280,8 +3281,10 @@ def recovery_go_app(page: ft.Page) -> None:
                     if now - float(value.get("last_seen", 0)) <= ONLINE_USER_TTL_SECONDS]
 
     def disconnect_session(event: ft.ControlEvent | None = None) -> None:
-        nonlocal session_active
+        nonlocal session_active, session_generation, presence_thread_started
         session_active = False
+        session_generation += 1
+        presence_thread_started = False
         with ONLINE_USERS_LOCK:
             ONLINE_USERS.pop(user_id, None)
 
@@ -3309,9 +3312,9 @@ def recovery_go_app(page: ft.Page) -> None:
             except (OSError, json.JSONDecodeError):
                 pass
 
-    def presence_loop() -> None:
+    def presence_loop(generation: int) -> None:
         nonlocal presence_signature, last_content_revision
-        while session_active:
+        while session_active and generation == session_generation:
             update_presence()
             users = online_users_snapshot()
             signature = "|".join(sorted(f"{item['id']}:{item['sharing']}:{item['lat']:.4f}:{item['lon']:.4f}" for item in users))
@@ -3520,15 +3523,19 @@ def recovery_go_app(page: ft.Page) -> None:
             render()
 
         def logout(logout_event: ft.ControlEvent) -> None:
-            nonlocal authenticated_username, presence_thread_started
+            nonlocal authenticated_username, sharing_location
+            save_app_state()
+            sharing_location = False
             disconnect_session()
-            presence_thread_started = False
             authenticated_username = None
             try:
                 page.client_storage.remove("m3ow.auth_user")
             except Exception:
                 pass
             dialog.open = False
+            page.on_resized = None
+            page.on_keyboard_event = None
+            page.on_disconnect = None
             show_auth_screen()
 
         dialog.actions = [ft.TextButton("ログアウト", icon=ft.Icons.LOGOUT, on_click=logout),
@@ -4183,9 +4190,15 @@ def recovery_go_app(page: ft.Page) -> None:
             pass
 
     def start_main_app() -> None:
-        nonlocal presence_thread_started, session_active
+        nonlocal presence_thread_started, session_active, session_generation, presence_signature
         session_active = True
+        if not presence_thread_started:
+            session_generation += 1
+        current_generation = session_generation
+        presence_signature = ""
         page.clean()
+        page.overlay.clear()
+        page.overlay.append(geolocator)
         page.on_resized = render
         page.on_disconnect = disconnect_session
         update_presence()
@@ -4193,10 +4206,13 @@ def recovery_go_app(page: ft.Page) -> None:
         render()
         if not presence_thread_started:
             presence_thread_started = True
-            page.run_thread(presence_loop)
+            page.run_thread(presence_loop, current_generation)
 
     def show_auth_screen(register_mode: bool = False) -> None:
         page.clean()
+        page.overlay.clear()
+        page.on_resized = None
+        page.on_keyboard_event = None
         username = ft.TextField(label="ユーザーID", prefix_icon=ft.Icons.PERSON, autofocus=True)
         display_name = ft.TextField(label="表示名", prefix_icon=ft.Icons.BADGE, visible=register_mode)
         password = ft.TextField(label="パスワード", prefix_icon=ft.Icons.LOCK, password=True, can_reveal_password=True)
