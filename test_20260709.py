@@ -25,6 +25,8 @@ ONLINE_USERS: dict[str, dict] = {}
 ONLINE_USERS_LOCK = threading.Lock()
 ONLINE_USER_TTL_SECONDS = 15
 SERVER_CONTENT_REVISION = 0
+COMMUNITY_COLUMNS: list[dict] = []
+COMMUNITY_COLUMNS_LOCK = threading.RLock()
 
 
 METALS = {
@@ -3161,17 +3163,22 @@ def recovery_go_app(page: ft.Page) -> None:
                 spots.extend(item for item in saved if isinstance(item, dict))
         except (OSError, json.JSONDecodeError):
             pass
-    community_columns = [
+    default_community_columns = [
         {"title": "古いスマホは小さな鉱山", "body": "引き出しに眠るスマホにも金・銀・パラジウムが含まれています。まずはデータを消去して、認定された回収場所へ持っていきましょう。", "author": "fukucycle編集部", "category": "はじめて", "likes": 12},
         {"title": "バッテリーを安全に手放すコツ", "body": "膨張や破損がある電池は通常の回収ボックスに入れず、自治体や販売店へ状態を伝えて相談することが大切です。", "author": "eco_taro", "category": "安全", "likes": 8},
     ]
-    if columns_file.exists():
-        try:
-            saved_columns = json.loads(columns_file.read_text(encoding="utf-8"))
-            if isinstance(saved_columns, list):
-                community_columns = [item for item in saved_columns if isinstance(item, dict)]
-        except (OSError, json.JSONDecodeError):
-            pass
+    with COMMUNITY_COLUMNS_LOCK:
+        if not COMMUNITY_COLUMNS:
+            loaded_columns = default_community_columns
+            if columns_file.exists():
+                try:
+                    saved_columns = json.loads(columns_file.read_text(encoding="utf-8"))
+                    if isinstance(saved_columns, list):
+                        loaded_columns = [item for item in saved_columns if isinstance(item, dict)]
+                except (OSError, json.JSONDecodeError):
+                    pass
+            COMMUNITY_COLUMNS.extend(loaded_columns)
+        community_columns = COMMUNITY_COLUMNS
     xp = 0
     recycled = 0
     selected_spot: dict | None = None
@@ -3297,7 +3304,8 @@ def recovery_go_app(page: ft.Page) -> None:
             try:
                 shared_columns = json.loads(columns_file.read_text(encoding="utf-8"))
                 if isinstance(shared_columns, list):
-                    community_columns[:] = [item for item in shared_columns if isinstance(item, dict)]
+                    with COMMUNITY_COLUMNS_LOCK:
+                        community_columns[:] = [item for item in shared_columns if isinstance(item, dict)]
             except (OSError, json.JSONDecodeError):
                 pass
 
@@ -3952,31 +3960,57 @@ def recovery_go_app(page: ft.Page) -> None:
                         ft.Row([ft.Text("Au 金", size=10, color="#FFD86B"), ft.Text("Ag 銀", size=10, color="#B9C5CB"),
                                 ft.Text("Pd パラジウム", size=10, color="#D6A06C")], spacing=12),
                     ], spacing=10),
-                    padding=14, bgcolor="#2B1D17", border_radius=18,
+                    padding=14,
+                    bgcolor=ft.Colors.with_opacity(.72, "#07384A"),
+                    border=ft.border.all(1, ft.Colors.with_opacity(.28, ft.Colors.WHITE)),
+                    border_radius=18,
                     on_click=lambda e, k=key: toast(f"{DEVICE_LIBRARY[k]['name']}を素材ラボに追加しました"),
                 )
             )
         return [
-            ft.Container(width=width, height=height, bgcolor="#120D0B"),
+            ft.Container(
+                width=width,
+                height=height,
+                gradient=ft.LinearGradient(
+                    begin=ft.alignment.top_center,
+                    end=ft.alignment.bottom_center,
+                    colors=["#EAFBFF", "#7DD8ED", "#176A86", "#082B3A"],
+                    stops=[0.0, 0.28, 0.68, 1.0],
+                ),
+            ),
+            ft.Container(left=width * .08, top=height * .16, width=26, height=26,
+                         border=ft.border.all(2, ft.Colors.with_opacity(.55, ft.Colors.WHITE)), border_radius=20),
+            ft.Container(left=width * .78, top=height * .25, width=14, height=14,
+                         border=ft.border.all(2, ft.Colors.with_opacity(.45, ft.Colors.WHITE)), border_radius=20),
+            ft.Container(left=width * .68, top=height * .52, width=34, height=34,
+                         border=ft.border.all(2, ft.Colors.with_opacity(.32, ft.Colors.WHITE)), border_radius=24),
             ft.Container(left=20, top=26, width=width - 40, height=height - 110,
                          content=ft.Column([
                              ft.Text("素材ラボ", size=28, weight=ft.FontWeight.BOLD),
-                             ft.Text("元の都市鉱山シミュレーション", color="#BCAEA4"),
-                             glass(ft.Column([
+                             ft.Text("水の動きから、デバイスに眠る資源を見つけよう。", color="#DDF8FF"),
+                             ft.Container(content=ft.Column([
                                  ft.Row([ft.Icon(ft.Icons.WATER_DROP, color="#73D7FF", size=34),
                                          ft.Column([ft.Text("デバイスを素材へ戻す", weight=ft.FontWeight.BOLD),
-                                                    ft.Text("製品ごとの貴金属量を比較できます", size=11, color="#BCAEA4")], expand=True)], spacing=12),
-                                 ft.FilledButton("元のフルシミュレーションを開く", icon=ft.Icons.PLAY_ARROW,
+                                                    ft.Text("水中でほどける素材と貴金属量を観察できます", size=11, color="#B9EAF5")], expand=True)], spacing=12),
+                                 ft.FilledButton("水中ラボを開く", icon=ft.Icons.WATER,
                                                  on_click=open_full_lab, width=width - 76,
-                                                 style=ft.ButtonStyle(bgcolor="#D6A06C", color="#120D0B")),
-                             ], spacing=12)),
+                                                 style=ft.ButtonStyle(bgcolor="#D8F8FF", color="#083548")),
+                             ], spacing=12), padding=18,
+                                bgcolor=ft.Colors.with_opacity(.68, "#07384A"),
+                                border=ft.border.all(1, ft.Colors.with_opacity(.5, ft.Colors.WHITE)),
+                                border_radius=24,
+                                blur=ft.Blur(12, 12)),
                              ft.Column(device_cards, spacing=10, scroll=ft.ScrollMode.AUTO, expand=True),
                          ], spacing=12)),
         ]
 
     def save_columns() -> None:
         try:
-            columns_file.write_text(json.dumps(community_columns, ensure_ascii=False, indent=2), encoding="utf-8")
+            with COMMUNITY_COLUMNS_LOCK:
+                columns_file.write_text(
+                    json.dumps(community_columns, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
             announce_content_change()
         except OSError:
             toast("コラムの保存に失敗しました")
@@ -3985,7 +4019,8 @@ def recovery_go_app(page: ft.Page) -> None:
         dialog = ft.AlertDialog(modal=True)
 
         def like(event: ft.ControlEvent) -> None:
-            column["likes"] = int(column.get("likes", 0)) + 1
+            with COMMUNITY_COLUMNS_LOCK:
+                column["likes"] = int(column.get("likes", 0)) + 1
             save_columns()
             like_button.text = str(column["likes"])
             page.update()
@@ -4011,7 +4046,7 @@ def recovery_go_app(page: ft.Page) -> None:
 
     def compose_column(event: ft.ControlEvent | None = None) -> None:
         title = ft.TextField(label="タイトル *", autofocus=True, max_length=60)
-        author = ft.TextField(label="投稿者名", value="匿名")
+        author = ft.TextField(label="投稿者名", value=user_name if authenticated_username else "匿名")
         category = ft.Dropdown(label="カテゴリ", value="発見", options=[ft.dropdown.Option(v) for v in ["発見", "回収体験", "安全", "アイデア", "地域情報"]])
         body = ft.TextField(label="本文 *", multiline=True, min_lines=5, max_lines=9, max_length=1200)
         dialog = ft.AlertDialog(modal=True, title=ft.Text("みんなのコラムを書く", weight=ft.FontWeight.BOLD))
@@ -4022,16 +4057,23 @@ def recovery_go_app(page: ft.Page) -> None:
                 body.error_text = "本文を入力してください" if not (body.value or "").strip() else None
                 page.update()
                 return
-            community_columns.insert(0, {"title": title.value.strip(), "body": body.value.strip(),
-                                          "author": (author.value or "匿名").strip(), "category": category.value,
-                                          "likes": 0})
+            with COMMUNITY_COLUMNS_LOCK:
+                community_columns.insert(0, {
+                    "id": uuid.uuid4().hex,
+                    "title": title.value.strip(),
+                    "body": body.value.strip(),
+                    "author": (author.value or "匿名").strip(),
+                    "category": category.value,
+                    "likes": 0,
+                    "published_at": date.today().isoformat(),
+                })
             save_columns()
             dialog.open = False
-            toast("コラムを公開しました")
+            toast("サイトのみんなにコラムを公開しました")
             render()
 
         dialog.content = ft.Container(ft.Column([title, author, category, body,
-                                                   ft.Text("投稿内容はこの端末のコミュニティ一覧に保存されます。", size=10, color="#BCAEA4")],
+                                                   ft.Text("投稿すると、このサイトを利用しているみんなに公開されます。", size=10, color="#BCAEA4")],
                                                   tight=True, spacing=12), width=min(480, dimensions()[0] - 64))
         dialog.actions = [ft.TextButton("キャンセル", on_click=lambda e: setattr(dialog, "open", False) or page.update()),
                           ft.FilledButton("公開する", icon=ft.Icons.PUBLISH, on_click=publish)]
@@ -4040,6 +4082,8 @@ def recovery_go_app(page: ft.Page) -> None:
         page.update()
 
     def learn_screen(width: int, height: int) -> list[ft.Control]:
+        with COMMUNITY_COLUMNS_LOCK:
+            columns_snapshot = list(community_columns)
         lessons = [
             ("都市鉱山とは？", "使われなくなった電子機器に眠る金属資源。日本の家庭にも大量の資源が蓄積されています。", ft.Icons.LOCATION_CITY, "#D6A06C"),
             ("スマホの中の資源", "金・銀・パラジウムなど、少量でも価値の高い金属が高密度で含まれています。", ft.Icons.PHONE_IPHONE, "#73D7FF"),
@@ -4067,7 +4111,7 @@ def recovery_go_app(page: ft.Page) -> None:
                 ], spacing=7),
                 padding=14, bgcolor="#2B1D17", border=ft.border.all(1, "#4B342A"), border_radius=18,
                 on_click=lambda e, item=column: open_column(item),
-            ) for column in community_columns
+            ) for column in columns_snapshot
         ]
         return [ft.Container(width=width, height=height, bgcolor="#120D0B"),
                 ft.Container(left=20, top=26, width=width - 40, height=height - 110,
@@ -4079,7 +4123,8 @@ def recovery_go_app(page: ft.Page) -> None:
                                                 ft.Column([*lesson_cards,
                                                            ft.Container(height=8),
                                                            ft.Text("みんなのコラム", size=20, weight=ft.FontWeight.BOLD),
-                                                           ft.Text(f"{len(community_columns)}件の投稿", size=11, color="#BCAEA4"),
+                                                           ft.Row([ft.Icon(ft.Icons.PUBLIC, size=14, color="#D6A06C"),
+                                                                   ft.Text(f"サイトで公開中・{len(columns_snapshot)}件の投稿", size=11, color="#BCAEA4")], spacing=5),
                                                            *column_cards], spacing=11, scroll=ft.ScrollMode.AUTO, expand=True)], spacing=12))]
 
     def bag_screen(width: int, height: int) -> list[ft.Control]:
