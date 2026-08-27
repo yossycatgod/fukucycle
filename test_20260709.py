@@ -3735,40 +3735,6 @@ def recovery_go_app(page: ft.Page) -> None:
             ),
         )
 
-    def nearest_direction_hud(width: int) -> ft.Container | None:
-        candidates = visible_spots()
-        if not candidates:
-            return None
-        nearest = min(candidates, key=lambda item: item["distance"])
-        bearing = bearing_to(float(nearest["lat"]), float(nearest["lon"]))
-        return ft.Container(
-            left=16,
-            top=196,
-            width=min(width - 96, 300),
-            content=ft.Row([
-                ft.Container(
-                    content=ft.Icon(ft.Icons.ARROW_UPWARD, size=38, color="#07110F",
-                                    rotate=ft.Rotate(math.radians(bearing))),
-                    width=62, height=62, alignment=ft.alignment.center,
-                    bgcolor="#62F6B5", border=ft.border.all(3, ft.Colors.WHITE), border_radius=31,
-                    shadow=ft.BoxShadow(blur_radius=18, color=ft.Colors.with_opacity(.45, "#18A66A"), offset=ft.Offset(0, 7)),
-                ),
-                ft.Column([
-                    ft.Text("NEAREST  •  " + compass_name(bearing), size=9, color="#62F6B5", weight=ft.FontWeight.BOLD),
-                    ft.Text(nearest["name"], size=13, weight=ft.FontWeight.BOLD,
-                            max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
-                    ft.Text(format_distance(nearest["distance"]), size=20, weight=ft.FontWeight.BOLD),
-                ], spacing=1, expand=True),
-                ft.Icon(ft.Icons.CHEVRON_RIGHT, color="#9AABA3"),
-            ], spacing=11, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-            padding=10,
-            bgcolor=ft.Colors.with_opacity(.94, "#13201B"),
-            border=ft.border.all(1, ft.Colors.with_opacity(.18, ft.Colors.WHITE)),
-            border_radius=24,
-            shadow=ft.BoxShadow(blur_radius=22, color=ft.Colors.with_opacity(.36, ft.Colors.BLACK), offset=ft.Offset(0, 10)),
-            on_click=lambda e: open_spot(nearest),
-        )
-
     def detail_sheet(width: int, height: int) -> ft.Container | None:
         if selected_spot is None:
             return None
@@ -4079,9 +4045,6 @@ def recovery_go_app(page: ft.Page) -> None:
         width, height = dimensions()
         if active_tab == "map":
             controls = [*map_background(width, height), top_hud(width), *map_actions(width, height), map_filter_bar(width)]
-            nearest_hud = nearest_direction_hud(width)
-            if nearest_hud:
-                controls.append(nearest_hud)
             detail = detail_sheet(width, height)
             if detail:
                 controls.append(detail)
