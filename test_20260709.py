@@ -1162,8 +1162,8 @@ def main(page: ft.Page) -> None:
     update_view()
 
 
-def physics_app(page: ft.Page) -> None:
-    page.title = "fukucycle — Material Recovery"
+def physics_app(page: ft.Page, on_back=None) -> None:
+    page.title = "fukucycle — 都市鉱山ラボ"
     page.theme_mode = ft.ThemeMode.DARK
     page.bgcolor = "#05070A"
     page.padding = 0
@@ -1221,6 +1221,28 @@ def physics_app(page: ft.Page) -> None:
     device_quantities = ft.Column(spacing=6)
     active_label = ft.Text(weight=ft.FontWeight.BOLD, color=ft.Colors.CYAN_100)
     hint_text = ft.Text(color=ft.Colors.BLUE_GREY_100)
+
+    def leave_lab(event: ft.ControlEvent | None = None) -> None:
+        nonlocal simulation_running
+        simulation_running = False
+        page.on_keyboard_event = None
+        page.on_resized = None
+        page.clean()
+        if on_back:
+            on_back()
+
+    def back_to_explorer_button() -> ft.Container:
+        return ft.Container(
+            left=16,
+            top=16,
+            content=ft.FilledButton(
+                "探索画面へ戻る",
+                icon=ft.Icons.ARROW_BACK,
+                on_click=leave_lab,
+                style=ft.ButtonStyle(bgcolor="#D6A06C", color="#120D0B"),
+            ),
+            shadow=ft.BoxShadow(blur_radius=18, color=ft.Colors.with_opacity(.35, ft.Colors.BLACK)),
+        )
 
     # A small, local-first collection point directory.  The coordinates are used
     # only to calculate an approximate straight-line distance from the demo
@@ -1996,6 +2018,15 @@ def physics_app(page: ft.Page) -> None:
             ),
         ]
 
+    def phase_label(phase: str) -> str:
+        return {
+            "fall": "落下中",
+            "splash": "着水",
+            "sink": "沈降中",
+            "dissolve": "素材化中",
+            "settled": "回収済み",
+        }.get(phase, phase)
+
     def build_drop_controls(
         drop: dict[str, float | str],
         index: int,
@@ -2212,7 +2243,7 @@ def physics_app(page: ft.Page) -> None:
                 top=min(stage_height - 34, sink_base + 136),
                 width=104,
                 content=ft.Text(
-                    f"{device['name']} / {'残留' if phase == 'settled' else phase}",
+                    f"{device['name']} / {phase_label(phase)}",
                     size=11,
                     text_align=ft.TextAlign.CENTER,
                     color=ft.Colors.BLUE_GREY_100,
@@ -2682,7 +2713,7 @@ def physics_app(page: ft.Page) -> None:
                         size=12,
                         weight=ft.FontWeight.BOLD,
                     ),
-                    ft.Text("H 表示切替  Z 戻す", size=11, color=ft.Colors.BLUE_GREY_200),
+                    ft.Text("Hキー: 表示切替  Zキー: 取り消す", size=11, color=ft.Colors.BLUE_GREY_200),
                 ],
                 spacing=8,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -2695,7 +2726,7 @@ def physics_app(page: ft.Page) -> None:
 
     def build_overlay_controls() -> list[ft.Control]:
         if not ui_visible:
-            return [visibility_button(), mini_status()]
+            return [back_to_explorer_button(), visibility_button(), mini_status()]
 
         if stage_width < 700:
             totals = total_by_symbol()
@@ -2709,6 +2740,12 @@ def physics_app(page: ft.Page) -> None:
             header = glass_panel(
                 ft.Row(
                     [
+                        ft.IconButton(
+                            icon=ft.Icons.ARROW_BACK,
+                            icon_color=ft.Colors.CYAN_ACCENT_400,
+                            tooltip="探索画面へ戻る",
+                            on_click=leave_lab,
+                        ),
                         ft.Container(
                             content=ft.Icon(ft.Icons.WAVES, color="#071015", size=20),
                             width=38,
@@ -2720,7 +2757,7 @@ def physics_app(page: ft.Page) -> None:
                         ft.Column(
                             [
                                 ft.Text("fukucycle", size=18, weight=ft.FontWeight.BOLD),
-                                ft.Text("MATERIAL RECOVERY", size=9, color=ft.Colors.BLUE_GREY_300),
+                                ft.Text("都市鉱山・素材回収ラボ", size=9, color=ft.Colors.BLUE_GREY_300),
                             ],
                             spacing=0,
                             expand=True,
@@ -2749,10 +2786,10 @@ def physics_app(page: ft.Page) -> None:
                 width=stage_width - 32,
                 content=ft.Row(
                     [
-                        ft.Column([ft.Text("RECOVERED", size=9, color=ft.Colors.BLUE_GREY_400),
+                        ft.Column([ft.Text("回収素材", size=9, color=ft.Colors.BLUE_GREY_400),
                                    ft.Text(f"{material_total:.3f} g", size=24, weight=ft.FontWeight.BOLD)], spacing=0),
                         ft.Container(width=1, height=34, bgcolor=ft.Colors.with_opacity(0.14, ft.Colors.WHITE)),
-                        ft.Column([ft.Text("DEVICES", size=9, color=ft.Colors.BLUE_GREY_400),
+                        ft.Column([ft.Text("投入数", size=9, color=ft.Colors.BLUE_GREY_400),
                                    ft.Text(f"{device_total}", size=24, weight=ft.FontWeight.BOLD)], spacing=0),
                         ft.Container(expand=True),
                         ft.Container(
@@ -2824,11 +2861,17 @@ def physics_app(page: ft.Page) -> None:
             glass_panel(
                 ft.Row(
                     controls=[
+                        ft.IconButton(
+                            icon=ft.Icons.ARROW_BACK,
+                            icon_color=ft.Colors.CYAN_ACCENT_400,
+                            tooltip="探索画面へ戻る",
+                            on_click=leave_lab,
+                        ),
                         ft.Icon(ft.Icons.WAVES, color=ft.Colors.CYAN_ACCENT_400, size=24),
                         ft.Column(
                             controls=[
                                 ft.Text(
-                                    "Material Drop Lab",
+                                    "都市鉱山 素材ラボ",
                                     size=20,
                                     weight=ft.FontWeight.BOLD,
                                 ),
@@ -2901,10 +2944,10 @@ def physics_app(page: ft.Page) -> None:
                     controls=[
                         ft.Row(
                             controls=[
-                                panel_heading(ft.Icons.INVENTORY_2, "Device Dock"),
+                                panel_heading(ft.Icons.INVENTORY_2, "デバイス選択"),
                                 active_label,
                                 ft.Text(
-                                    "Space 投入 / 1-8 選択 / H 非表示",
+                                    "スペースキー: 投入 / 1〜8: 選択 / Hキー: 非表示",
                                     size=11,
                                     color=ft.Colors.BLUE_GREY_200,
                                 ),
@@ -3887,8 +3930,7 @@ def recovery_go_app(page: ft.Page) -> None:
 
     def open_full_lab(event: ft.ControlEvent | None = None) -> None:
         page.clean()
-        page.overlay.clear()
-        physics_app(page)
+        physics_app(page, on_back=start_main_app)
 
     def lab_screen(width: int, height: int) -> list[ft.Control]:
         device_cards = []
