@@ -6,7 +6,7 @@ fukucycleは、都市鉱山を「探す・回収する・学ぶ」体験へ変�
 
 ## リリースURL
 
-`公開後にここへ記入`
+https://fukucycle.onrender.com/
 
 ## 審査用テストアカウント
 
