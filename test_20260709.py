@@ -3143,11 +3143,18 @@ def recovery_go_app(page: ft.Page) -> None:
         authenticated_username = None
 
     spots = [
-        {"name": "丸の内リサイクルポート", "kind": "小型家電", "lat": 35.6798, "lon": 139.7638, "distance": 0, "x": .23, "y": .27, "color": "#D6A06C", "visited": False, "xp": 80},
-        {"name": "京橋バッテリーステーション", "kind": "バッテリー", "lat": 35.6768, "lon": 139.7701, "distance": 0, "x": .70, "y": .22, "color": "#FFD86B", "visited": False, "xp": 120},
-        {"name": "有楽町デバイス回収所", "kind": "スマホ・PC", "lat": 35.6751, "lon": 139.7634, "distance": 0, "x": .72, "y": .57, "color": "#73D7FF", "visited": False, "xp": 100},
-        {"name": "日本橋リユースラボ", "kind": "ゲーム機", "lat": 35.6825, "lon": 139.7744, "distance": 0, "x": .18, "y": .63, "color": "#BFA5FF", "visited": False, "xp": 150},
+        {"name": "丸の内リサイクルポート", "kind": "小型家電", "accepted_items": ["小型家電"], "demo": True, "lat": 35.6798, "lon": 139.7638, "distance": 0, "x": .23, "y": .27, "color": "#D6A06C", "visited": False, "xp": 80},
+        {"name": "京橋バッテリーステーション", "kind": "バッテリー", "accepted_items": ["充電池"], "demo": True, "lat": 35.6768, "lon": 139.7701, "distance": 0, "x": .70, "y": .22, "color": "#FFD86B", "visited": False, "xp": 120},
+        {"name": "有楽町デバイス回収所", "kind": "スマホ・PC", "accepted_items": ["スマホ", "ノートPC"], "demo": True, "lat": 35.6751, "lon": 139.7634, "distance": 0, "x": .72, "y": .57, "color": "#73D7FF", "visited": False, "xp": 100},
+        {"name": "日本橋リユースラボ", "kind": "ゲーム機", "accepted_items": ["携帯ゲーム機"], "demo": True, "lat": 35.6825, "lon": 139.7744, "distance": 0, "x": .18, "y": .63, "color": "#BFA5FF", "visited": False, "xp": 150},
     ]
+    device_guides = {
+        "スマホ": ["写真や連絡先をバックアップ", "端末を初期化し、SIM・SDカードを外す", "電池の膨張・破損があれば回収先へ事前相談"],
+        "ノートPC": ["必要なデータをバックアップ", "アカウントからサインアウトして初期化", "取り外せる電池や付属品の扱いを回収先で確認"],
+        "携帯ゲーム機": ["セーブデータをバックアップ", "アカウント連携を解除して初期化", "ゲームカード・SDカードを取り外す"],
+        "充電池": ["端子をテープで絶縁", "膨張・液漏れ・破損品は通常の回収箱へ入れない", "自治体または販売店へ状態を伝えて相談"],
+        "小型家電": ["個人データがあれば削除", "電池を外せる場合は分別方法を確認", "回収先のサイズ・対象品目を事前確認"],
+    }
     data_file = Path(__file__).with_name("collection_points.json")
     columns_file = Path(__file__).with_name("urban_mine_columns.json")
     state_file = Path(__file__).with_name("m3ow_state.json")
@@ -3185,6 +3192,7 @@ def recovery_go_app(page: ft.Page) -> None:
     selected_spot: dict | None = None
     active_tab = "map"
     active_spot_filter = "すべて"
+    selected_device_type = "すべて"
     nearby_query = ""
     user_id = (hashlib.sha256(authenticated_username.encode()).hexdigest()[:8]
                if authenticated_username else uuid.uuid4().hex[:8])
@@ -3215,6 +3223,7 @@ def recovery_go_app(page: ft.Page) -> None:
             xp = int(saved_state.get("xp", xp))
             recycled = int(saved_state.get("recycled", recycled))
             active_spot_filter = saved_state.get("filter", active_spot_filter)
+            selected_device_type = saved_state.get("device_type", selected_device_type)
             spot_states = saved_state.get("spots", {})
             for spot in spots:
                 state = spot_states.get(spot["name"], {})
@@ -3233,6 +3242,7 @@ def recovery_go_app(page: ft.Page) -> None:
         if isinstance(client_state, dict):
             xp = int(client_state.get("xp", xp))
             recycled = int(client_state.get("recycled", recycled))
+            selected_device_type = client_state.get("device_type", selected_device_type)
             for spot in spots:
                 state = client_state.get("spots", {}).get(spot["name"], {})
                 spot["favorite"] = bool(state.get("favorite", spot.get("favorite", False)))
@@ -3248,6 +3258,7 @@ def recovery_go_app(page: ft.Page) -> None:
             "xp": xp,
             "recycled": recycled,
             "filter": active_spot_filter,
+            "device_type": selected_device_type,
             "spots": {spot["name"]: {"favorite": bool(spot.get("favorite")),
                                       "visited": bool(spot.get("visited")),
                                       "last_checkin": spot.get("last_checkin"),
@@ -3613,12 +3624,129 @@ def recovery_go_app(page: ft.Page) -> None:
         save_app_state()
         render()
 
+    def spot_accepted_items(spot: dict) -> list[str]:
+        accepted = spot.get("accepted_items")
+        if isinstance(accepted, list) and accepted:
+            return [str(item) for item in accepted]
+        return {
+            "スマホ・PC": ["スマホ", "ノートPC"],
+            "ゲーム機": ["携帯ゲーム機"],
+            "バッテリー": ["充電池"],
+        }.get(str(spot.get("kind")), ["小型家電"])
+
+    def show_preparation_guide(
+        event: ft.ControlEvent | None = None,
+        device_type: str | None = None,
+        spot: dict | None = None,
+    ) -> None:
+        target = device_type or (selected_device_type if selected_device_type != "すべて" else None)
+        if target is None and spot is not None:
+            target = spot_accepted_items(spot)[0]
+        target = target or "小型家電"
+        steps = device_guides.get(target, device_guides["小型家電"])
+        source_url = str((spot or {}).get("source_url") or "")
+        parsed_source = urllib.parse.urlparse(source_url)
+        if parsed_source.scheme not in {"http", "https"}:
+            source_url = ""
+        verified_on = (spot or {}).get("verified_on")
+        submitted_on = (spot or {}).get("submitted_on")
+        source_label = (spot or {}).get("source_label") or (
+            "画面体験用のデモ情報" if (spot or {}).get("demo") else "公式情報は未確認"
+        )
+        official = bool((spot or {}).get("official_source") and source_url)
+        dialog = ft.AlertDialog(modal=True, title=ft.Text(f"{target}を安全に回収する準備", weight=ft.FontWeight.BOLD))
+        condition_controls: list[ft.Control] = []
+        if spot is not None:
+            condition_controls = [
+                ft.Divider(),
+                ft.Text(spot.get("name", "回収スポット"), size=16, weight=ft.FontWeight.BOLD),
+                ft.Text(f"受付対象: {'・'.join(spot_accepted_items(spot))}"),
+                ft.Text(f"受付時間: {spot.get('hours') or '未確認（回収先へ確認してください）'}"),
+                ft.Text(
+                    "注意事項: " + (
+                        "このスポットは画面体験用のデモ情報です。実在・受付状況を保証しません。"
+                        if spot.get("demo")
+                        else spot.get("caution") or "回収条件は変更される場合があります。持ち込み前に公式情報をご確認ください。"
+                    ),
+                    size=12,
+                ),
+                ft.Row([
+                    ft.Icon(ft.Icons.VERIFIED if official else ft.Icons.INFO_OUTLINE,
+                            color="#D6A06C" if official else "#FFD86B", size=17),
+                    ft.Text(
+                        f"出典: {source_label}"
+                        + (f" / 確認日 {verified_on}" if verified_on else "")
+                        + (f" / 投稿日 {submitted_on}" if submitted_on and not verified_on else ""),
+                            size=11, color="#BCAEA4", expand=True),
+                ], spacing=6),
+            ]
+        dialog.content = ft.Container(
+            content=ft.Column([
+                ft.Text("持ち込む前のチェック", color="#D6A06C", weight=ft.FontWeight.BOLD),
+                *[
+                    ft.Row([ft.Icon(ft.Icons.CHECK_CIRCLE_OUTLINE, color="#73D7FF", size=19),
+                            ft.Text(step, size=12, expand=True)], spacing=8)
+                    for step in steps
+                ],
+                ft.Text("破損・膨張した電池は無理に触らず、自治体や販売店などの正規窓口へ相談してください。",
+                        size=11, color="#FFD86B"),
+                *condition_controls,
+            ], spacing=10, scroll=ft.ScrollMode.AUTO),
+            width=min(480, dimensions()[0] - 48),
+            height=min(500, dimensions()[1] - 180),
+        )
+        actions: list[ft.Control] = [
+            ft.TextButton("閉じる", on_click=lambda e: setattr(dialog, "open", False) or page.update())
+        ]
+        if source_url:
+            actions.append(ft.FilledButton("公式情報を開く" if official else "提供された情報元を開く",
+                                           icon=ft.Icons.OPEN_IN_NEW,
+                                           on_click=lambda e: page.launch_url(source_url)))
+        dialog.actions = actions
+        page.overlay.append(dialog)
+        dialog.open = True
+        page.update()
+
+    def show_device_selector(event: ft.ControlEvent | None = None) -> None:
+        dialog = ft.AlertDialog(modal=True, title=ft.Text("回収したい機器を選ぶ", weight=ft.FontWeight.BOLD))
+
+        def choose(device_type: str) -> None:
+            nonlocal selected_device_type, selected_spot
+            selected_device_type = device_type
+            selected_spot = None
+            save_app_state()
+            dialog.open = False
+            render()
+            if device_type != "すべて":
+                show_preparation_guide(device_type=device_type)
+
+        choices = ["スマホ", "ノートPC", "携帯ゲーム機", "充電池", "小型家電"]
+        dialog.content = ft.Container(
+            ft.Column([
+                ft.Text("機器に対応する候補だけを地図に表示します。受付条件は各スポットで必ず確認してください。",
+                        size=11, color="#BCAEA4"),
+                ft.OutlinedButton("すべて表示", icon=ft.Icons.SELECT_ALL,
+                                  on_click=lambda e: choose("すべて"), width=340),
+                *[ft.FilledButton(item, icon=ft.Icons.DEVICES,
+                                  on_click=lambda e, value=item: choose(value), width=340)
+                  for item in choices],
+            ], spacing=8, tight=True),
+            width=min(360, dimensions()[0] - 48),
+        )
+        dialog.actions = [ft.TextButton("キャンセル", on_click=lambda e: setattr(dialog, "open", False) or page.update())]
+        page.overlay.append(dialog)
+        dialog.open = True
+        page.update()
+
     def visible_spots() -> list[dict]:
+        candidates = spots
+        if selected_device_type != "すべて":
+            candidates = [spot for spot in candidates if selected_device_type in spot_accepted_items(spot)]
         if active_spot_filter == "お気に入り":
-            return [spot for spot in spots if spot.get("favorite")]
+            return [spot for spot in candidates if spot.get("favorite")]
         if active_spot_filter == "すべて":
-            return spots
-        return [spot for spot in spots if spot["kind"] == active_spot_filter]
+            return candidates
+        return [spot for spot in candidates if spot["kind"] == active_spot_filter]
 
     def toggle_favorite(spot: dict) -> None:
         spot["favorite"] = not spot.get("favorite", False)
@@ -3779,6 +3907,13 @@ def recovery_go_app(page: ft.Page) -> None:
                 ft.IconButton(icon=ft.Icons.REMOVE, icon_color="#FFF9F1", tooltip="縮小", on_click=lambda e: change_zoom(-1)),
             ], spacing=0), 2, 16)),
             ft.Container(left=16, top=108, content=ft.Container(content=ft.Row([ft.Icon(ft.Icons.SEARCH, size=15, color="#D6A06C"), ft.Text("場所を検索", size=10, weight=ft.FontWeight.BOLD)], spacing=7), padding=ft.padding.symmetric(horizontal=12, vertical=8), bgcolor=ft.Colors.with_opacity(.85, "#241813"), border_radius=20, on_click=search_places)),
+            ft.Container(left=126, top=108, content=ft.Container(
+                content=ft.Row([ft.Icon(ft.Icons.DEVICES, size=15, color="#73D7FF"),
+                                ft.Text(selected_device_type if selected_device_type != "すべて" else "回収する機器", size=10, weight=ft.FontWeight.BOLD)], spacing=7),
+                padding=ft.padding.symmetric(horizontal=12, vertical=8),
+                bgcolor=ft.Colors.with_opacity(.90, "#241813"), border_radius=20,
+                border=ft.border.all(1, ft.Colors.with_opacity(.30, "#73D7FF")),
+                on_click=show_device_selector)),
         ]
 
     def map_filter_bar(width: int) -> ft.Container:
@@ -3843,6 +3978,20 @@ def recovery_go_app(page: ft.Page) -> None:
                                 ft.Container(expand=True),
                                 ft.Text(f"累計 {int(selected_spot.get('visit_count', 0))}回", size=11, color="#BCAEA4")], spacing=6),
                         ft.Row([
+                            ft.Icon(ft.Icons.INVENTORY_2_OUTLINED, size=16, color="#73D7FF"),
+                            ft.Text(f"受付対象: {'・'.join(spot_accepted_items(selected_spot))}", size=11, expand=True),
+                            ft.Container(
+                                content=ft.Text("デモ情報" if selected_spot.get("demo") else ("公式確認済み" if selected_spot.get("official_source") else "条件未確認"),
+                                                size=9, color="#120D0B", weight=ft.FontWeight.BOLD),
+                                padding=ft.padding.symmetric(horizontal=7, vertical=3),
+                                bgcolor="#73D7FF" if selected_spot.get("official_source") else "#FFD86B",
+                                border_radius=10,
+                            ),
+                        ], spacing=6),
+                        ft.OutlinedButton("受付条件・回収前の準備", icon=ft.Icons.FACT_CHECK,
+                                          on_click=lambda e: show_preparation_guide(spot=selected_spot),
+                                          width=width - 56),
+                        ft.Row([
                             ft.OutlinedButton("経路", icon=ft.Icons.DIRECTIONS,
                                               on_click=lambda e: open_directions(selected_spot), expand=True),
                             ft.OutlinedButton("共有", icon=ft.Icons.SHARE,
@@ -3861,17 +4010,35 @@ def recovery_go_app(page: ft.Page) -> None:
     def show_add_spot(event: ft.ControlEvent | None = None) -> None:
         name = ft.TextField(label="スポット名", prefix_icon=ft.Icons.RECYCLING, autofocus=True)
         kind = ft.Dropdown(label="回収できるもの", value="小型家電", options=[ft.dropdown.Option(v) for v in ["小型家電", "スマホ・PC", "バッテリー", "ゲーム機"]])
-        dialog = ft.AlertDialog(modal=True, title=ft.Text("新しいスポットを発見"), content=ft.Column([ft.Text("取得した現在地の緯度・経度と一緒に登録します。", color="#BCAEA4"), ft.Text(location_label.value, size=12, color="#D6A06C"), name, kind], width=min(360, dimensions()[0] - 64), tight=True), actions=[])
+        hours = ft.TextField(label="受付時間（分かる場合）", hint_text="例: 平日 9:00〜17:00")
+        caution = ft.TextField(label="注意事項（分かる場合）", multiline=True, min_lines=2, max_lines=3)
+        source_url = ft.TextField(label="情報元URL（任意）", prefix_icon=ft.Icons.LINK)
+        dialog = ft.AlertDialog(modal=True, title=ft.Text("新しいスポットを発見"), content=ft.Container(
+            ft.Column([ft.Text("取得した現在地の緯度・経度と一緒に登録します。投稿情報は公式確認済みとは表示されません。", color="#BCAEA4", size=11),
+                       ft.Text(location_label.value, size=12, color="#D6A06C"), name, kind, hours, caution, source_url],
+                      scroll=ft.ScrollMode.AUTO, spacing=9),
+            width=min(380, dimensions()[0] - 64), height=min(500, dimensions()[1] - 180)), actions=[])
 
         def save(event: ft.ControlEvent) -> None:
             if not (name.value or "").strip():
                 name.error_text = "スポット名を入力してください"
                 page.update()
                 return
+            entered_source_url = (source_url.value or "").strip()
+            if entered_source_url and urllib.parse.urlparse(entered_source_url).scheme not in {"http", "https"}:
+                source_url.error_text = "http:// または https:// で始まるURLを入力してください"
+                page.update()
+                return
             new_spot = {"name": name.value.strip(), "kind": kind.value,
                         "lat": current_position["lat"], "lon": current_position["lon"],
                         "distance": 0, "x": .56, "y": .39, "color": "#D6A06C",
-                        "visited": False, "xp": 100, "user_added": True}
+                        "visited": False, "xp": 100, "user_added": True,
+                        "hours": (hours.value or "").strip(),
+                        "caution": (caution.value or "").strip(),
+                        "source_url": entered_source_url,
+                        "source_label": "ユーザー提供情報（公式未確認）",
+                        "submitted_on": date.today().isoformat(),
+                        "official_source": False}
             spots.append(new_spot)
             refresh_distances()
             save_app_state()
