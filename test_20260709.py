@@ -3189,6 +3189,9 @@ def recovery_go_app(page: ft.Page) -> None:
         community_columns = COMMUNITY_COLUMNS
     xp = 0
     recycled = 0
+    survey_data: dict[str, dict] = {"pre": {}, "post": {}}
+    guidance_completed_devices: set[str] = set()
+    recycle_reports: list[dict] = []
     selected_spot: dict | None = None
     active_tab = "map"
     active_spot_filter = "すべて"
@@ -3224,6 +3227,14 @@ def recovery_go_app(page: ft.Page) -> None:
             recycled = int(saved_state.get("recycled", recycled))
             active_spot_filter = saved_state.get("filter", active_spot_filter)
             selected_device_type = saved_state.get("device_type", selected_device_type)
+            saved_surveys = saved_state.get("surveys", {})
+            if isinstance(saved_surveys, dict):
+                survey_data = {"pre": dict(saved_surveys.get("pre") or {}),
+                               "post": dict(saved_surveys.get("post") or {})}
+            guidance_completed_devices = set(saved_state.get("guidance_completed_devices") or [])
+            recycle_reports = list(saved_state.get("recycle_reports") or [])
+            recycled = sum(1 for report in recycle_reports
+                           if isinstance(report, dict) and report.get("verification") == "self_reported")
             spot_states = saved_state.get("spots", {})
             for spot in spots:
                 state = spot_states.get(spot["name"], {})
@@ -3231,6 +3242,7 @@ def recovery_go_app(page: ft.Page) -> None:
                 spot["visited"] = bool(state.get("visited", spot.get("visited", False)))
                 spot["last_checkin"] = state.get("last_checkin", spot.get("last_checkin"))
                 spot["visit_count"] = int(state.get("visit_count", 1 if spot.get("visited") else 0))
+                spot["last_recycle_report"] = state.get("last_recycle_report")
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             pass
 
@@ -3243,25 +3255,39 @@ def recovery_go_app(page: ft.Page) -> None:
             xp = int(client_state.get("xp", xp))
             recycled = int(client_state.get("recycled", recycled))
             selected_device_type = client_state.get("device_type", selected_device_type)
+            saved_surveys = client_state.get("surveys", {})
+            if isinstance(saved_surveys, dict):
+                survey_data = {"pre": dict(saved_surveys.get("pre") or {}),
+                               "post": dict(saved_surveys.get("post") or {})}
+            guidance_completed_devices = set(client_state.get("guidance_completed_devices") or [])
+            recycle_reports = list(client_state.get("recycle_reports") or [])
+            recycled = sum(1 for report in recycle_reports
+                           if isinstance(report, dict) and report.get("verification") == "self_reported")
             for spot in spots:
                 state = client_state.get("spots", {}).get(spot["name"], {})
                 spot["favorite"] = bool(state.get("favorite", spot.get("favorite", False)))
                 spot["visited"] = bool(state.get("visited", spot.get("visited", False)))
                 spot["last_checkin"] = state.get("last_checkin", spot.get("last_checkin"))
                 spot["visit_count"] = int(state.get("visit_count", spot.get("visit_count", 0)))
+                spot["last_recycle_report"] = state.get("last_recycle_report")
     except Exception:
         pass
     user_color = ["#FF7A8A", "#73D7FF", "#FFD86B", "#BFA5FF", "#D6A06C"][int(user_id[:2], 16) % 5]
 
     def save_app_state() -> None:
         payload = {
+            "state_version": 2,
             "xp": xp,
             "recycled": recycled,
             "filter": active_spot_filter,
             "device_type": selected_device_type,
+            "surveys": survey_data,
+            "guidance_completed_devices": sorted(guidance_completed_devices),
+            "recycle_reports": recycle_reports,
             "spots": {spot["name"]: {"favorite": bool(spot.get("favorite")),
                                       "visited": bool(spot.get("visited")),
                                       "last_checkin": spot.get("last_checkin"),
+                                      "last_recycle_report": spot.get("last_recycle_report"),
                                       "visit_count": int(spot.get("visit_count", 0))} for spot in spots},
         }
         try:
@@ -3593,8 +3619,11 @@ def recovery_go_app(page: ft.Page) -> None:
     def checked_in_today(spot: dict) -> bool:
         return spot.get("last_checkin") == date.today().isoformat()
 
+    def recycled_today(spot: dict) -> bool:
+        return spot.get("last_recycle_report") == date.today().isoformat()
+
     def visit_spot(event: ft.ControlEvent | None = None) -> None:
-        nonlocal xp, recycled
+        nonlocal xp
         if selected_spot is None:
             return
         if selected_spot["distance"] > 150:
@@ -3607,10 +3636,61 @@ def recovery_go_app(page: ft.Page) -> None:
         selected_spot["last_checkin"] = date.today().isoformat()
         selected_spot["visit_count"] = int(selected_spot.get("visit_count", 0)) + 1
         xp += selected_spot["xp"]
-        recycled += 1
         save_app_state()
-        toast(f"デイリーチェックイン！ +{selected_spot['xp']} XP")
+        toast(f"チェックイン完了！ +{selected_spot['xp']} XP（回収完了とは別記録です）")
         render()
+
+    def report_recycle_completion(event: ft.ControlEvent | None = None) -> None:
+        if selected_spot is None:
+            return
+        if selected_spot.get("demo"):
+            toast("デモスポットでは実際の回収完了を記録できません")
+            return
+        if not checked_in_today(selected_spot):
+            toast("先に現地でチェックインしてください")
+            return
+        if recycled_today(selected_spot):
+            toast("このスポットの回収完了は本日すでに記録済みです")
+            return
+        device = ft.Dropdown(
+            label="回収した機器",
+            value=selected_device_type if selected_device_type != "すべて" else spot_accepted_items(selected_spot)[0],
+            options=[ft.dropdown.Option(item) for item in spot_accepted_items(selected_spot)],
+        )
+        dialog = ft.AlertDialog(modal=True, title=ft.Text("回収完了を記録", weight=ft.FontWeight.BOLD))
+
+        def confirm(confirm_event: ft.ControlEvent) -> None:
+            nonlocal recycled
+            selected_spot["last_recycle_report"] = date.today().isoformat()
+            record = {
+                "id": uuid.uuid4().hex,
+                "date": date.today().isoformat(),
+                "spot": selected_spot.get("name"),
+                "device": device.value,
+                "verification": "self_reported",
+            }
+            recycle_reports.append(record)
+            recycled += 1
+            save_app_state()
+            dialog.open = False
+            toast("回収完了を自己申告として記録しました")
+            render()
+
+        dialog.content = ft.Container(
+            ft.Column([
+                device,
+                ft.Text("この記録は利用者による自己申告です。チェックインや第三者確認とは区別して集計されます。",
+                        size=11, color="#BCAEA4"),
+            ], tight=True, spacing=12),
+            width=min(400, dimensions()[0] - 56),
+        )
+        dialog.actions = [
+            ft.TextButton("キャンセル", on_click=lambda e: setattr(dialog, "open", False) or page.update()),
+            ft.FilledButton("自己申告で記録", icon=ft.Icons.HOW_TO_REG, on_click=confirm),
+        ]
+        page.overlay.append(dialog)
+        dialog.open = True
+        page.update()
 
     def open_spot(spot: dict) -> None:
         nonlocal selected_spot
@@ -3695,8 +3775,16 @@ def recovery_go_app(page: ft.Page) -> None:
             width=min(480, dimensions()[0] - 48),
             height=min(500, dimensions()[1] - 180),
         )
+        def complete_guide(complete_event: ft.ControlEvent) -> None:
+            guidance_completed_devices.add(target)
+            save_app_state()
+            dialog.open = False
+            toast(f"{target}の準備ガイドを確認済みにしました")
+            render()
+
         actions: list[ft.Control] = [
-            ft.TextButton("閉じる", on_click=lambda e: setattr(dialog, "open", False) or page.update())
+            ft.TextButton("閉じる", on_click=lambda e: setattr(dialog, "open", False) or page.update()),
+            ft.FilledButton("準備を確認した", icon=ft.Icons.TASK_ALT, on_click=complete_guide),
         ]
         if source_url:
             actions.append(ft.FilledButton("公式情報を開く" if official else "提供された情報元を開く",
@@ -3954,6 +4042,7 @@ def recovery_go_app(page: ft.Page) -> None:
             return None
         near = selected_spot["distance"] <= 150
         daily_done = checked_in_today(selected_spot)
+        recycle_done = recycled_today(selected_spot)
         return ft.Container(
             left=12,
             bottom=88,
@@ -4002,6 +4091,13 @@ def recovery_go_app(page: ft.Page) -> None:
                                         disabled=not near or daily_done, on_click=visit_spot,
                                         width=width - 56, height=48,
                                         style=ft.ButtonStyle(bgcolor="#D6A06C", color="#120D0B", shape=ft.RoundedRectangleBorder(radius=15))),
+                        ft.OutlinedButton(
+                            "デモでは記録不可" if selected_spot.get("demo") else ("本日の回収完了を記録済み" if recycle_done else "実際の回収完了を記録"),
+                            icon=ft.Icons.VERIFIED_OUTLINED,
+                            disabled=bool(selected_spot.get("demo")) or not daily_done or recycle_done,
+                            on_click=report_recycle_completion,
+                            width=width - 56,
+                        ),
                     ], spacing=12
                 ), padding=16, radius=26
             ),
@@ -4321,8 +4417,162 @@ def recovery_go_app(page: ft.Page) -> None:
                                                                    ft.Text(f"サイトで公開中・{len(columns_snapshot)}件の投稿", size=11, color="#BCAEA4")], spacing=5),
                                                            *column_cards], spacing=11, scroll=ft.ScrollMode.AUTO, expand=True)], spacing=12))]
 
+    def show_research_survey(stage: str) -> None:
+        is_pre = stage == "pre"
+        if is_pre:
+            first = ft.Dropdown(label="自宅に使っていない電子機器がありますか？",
+                                options=[ft.dropdown.Option(value) for value in ["ある", "ない", "分からない"]])
+            second = ft.Dropdown(label="利用前から回収方法を知っていましたか？",
+                                 options=[ft.dropdown.Option(value) for value in ["知っていた", "少し知っていた", "知らなかった"]])
+            third = None
+        else:
+            first = ft.Dropdown(label="アプリ利用後、回収したいと思いましたか？",
+                                options=[ft.dropdown.Option(value) for value in ["強く思う", "思う", "どちらともいえない", "あまり思わない"]])
+            second = ft.Dropdown(label="実際に回収先へ持ち込みましたか？",
+                                 options=[ft.dropdown.Option(value) for value in ["持ち込んだ", "まだ持ち込んでいない", "持ち込まない"]])
+            third = ft.Dropdown(label="途中で迷った・進めなかった主な理由",
+                                options=[ft.dropdown.Option(value) for value in ["特になし", "回収先が分からない", "受付条件が分からない", "準備方法が分からない", "距離・時間の問題", "安全面が不安", "その他"]])
+        error = ft.Text(color="#FF7A8A", size=11)
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("利用前アンケート" if is_pre else "利用後アンケート", weight=ft.FontWeight.BOLD),
+        )
+
+        def submit_survey(submit_event: ft.ControlEvent) -> None:
+            required = [first.value, second.value] + ([] if third is None else [third.value])
+            if not all(required):
+                error.value = "すべての項目を選択してください"
+                page.update()
+                return
+            if is_pre:
+                survey_data["pre"] = {
+                    "unused_device": first.value,
+                    "knew_recycling_method": second.value,
+                    "submitted_at": date.today().isoformat(),
+                }
+            else:
+                survey_data["post"] = {
+                    "recycling_intent": first.value,
+                    "actual_action": second.value,
+                    "barrier": third.value if third else None,
+                    "submitted_at": date.today().isoformat(),
+                }
+            save_app_state()
+            dialog.open = False
+            toast("任意アンケートへの回答を保存しました")
+            render()
+
+        controls: list[ft.Control] = [
+            ft.Text("回答は任意です。実証実験の改善指標として集計し、自由記述や位置情報は収集しません。",
+                    size=11, color="#BCAEA4"),
+            first,
+            second,
+        ]
+        if third is not None:
+            controls.append(third)
+        controls.append(error)
+        dialog.content = ft.Container(ft.Column(controls, tight=True, spacing=11),
+                                      width=min(430, dimensions()[0] - 56))
+        dialog.actions = [
+            ft.TextButton("回答しない", on_click=lambda e: setattr(dialog, "open", False) or page.update()),
+            ft.FilledButton("回答を保存", icon=ft.Icons.SEND, on_click=submit_survey),
+        ]
+        page.overlay.append(dialog)
+        dialog.open = True
+        page.update()
+
+    def pilot_metrics() -> dict[str, int | float | str]:
+        try:
+            with CONTENT_STORAGE_LOCK:
+                stored = json.loads(state_file.read_text(encoding="utf-8")) if state_file.exists() else {}
+            accounts = stored.get("accounts", {}) if isinstance(stored, dict) else {}
+            if not isinstance(accounts, dict):
+                accounts = {}
+        except (OSError, json.JSONDecodeError):
+            accounts = {}
+        participant_count = len(accounts)
+        guidance_users = sum(1 for state in accounts.values()
+                             if isinstance(state, dict) and state.get("guidance_completed_devices"))
+        checkin_count = 0
+        all_reports: list[dict] = []
+        post_answers: list[dict] = []
+        for state in accounts.values():
+            if not isinstance(state, dict):
+                continue
+            spot_states = state.get("spots", {})
+            if isinstance(spot_states, dict):
+                checkin_count += sum(int(spot_state.get("visit_count", 0))
+                                     for spot_state in spot_states.values() if isinstance(spot_state, dict))
+            reports = state.get("recycle_reports", [])
+            if isinstance(reports, list):
+                all_reports.extend(report for report in reports if isinstance(report, dict))
+            surveys = state.get("surveys", {})
+            if isinstance(surveys, dict):
+                post_answer = surveys.get("post", {})
+                if isinstance(post_answer, dict) and post_answer:
+                    post_answers.append(post_answer)
+        self_report_count = sum(1 for report in all_reports
+                                if report.get("verification") == "self_reported")
+        third_party_count = sum(1 for report in all_reports
+                                if report.get("verification") == "third_party_confirmed")
+        barriers: dict[str, int] = {}
+        for answer in post_answers:
+            barrier = str(answer.get("barrier") or "未回答")
+            barriers[barrier] = barriers.get(barrier, 0) + 1
+        top_barrier = max(barriers, key=barriers.get) if barriers else "データなし"
+        return {
+            "participants": participant_count,
+            "guidance_rate": (guidance_users / participant_count * 100) if participant_count else 0.0,
+            "checkins": checkin_count,
+            "self_reports": self_report_count,
+            "third_party_confirmed": third_party_count,
+            "post_answers": len(post_answers),
+            "top_barrier": top_barrier,
+        }
+
     def bag_screen(width: int, height: int) -> list[ft.Control]:
-        return [ft.Container(width=width, height=height, gradient=ft.LinearGradient(colors=["#332018", "#120D0B"])), ft.Container(left=20, top=30, width=width - 40, content=ft.Column([ft.Text("マイバッグ", size=28, weight=ft.FontWeight.BOLD), ft.Text("回収アクティビティ", color="#BCAEA4"), ft.Container(height=18), glass(ft.Column([ft.Icon(ft.Icons.EMOJI_EVENTS, color="#FFD86B", size=54), ft.Text(f"LEVEL {current_level()}", size=22, weight=ft.FontWeight.BOLD), ft.Text(f"累計 {xp} XP", color="#BCAEA4")], horizontal_alignment=ft.CrossAxisAlignment.CENTER), 24), ft.Row([glass(ft.Column([ft.Text(str(recycled), size=25, weight=ft.FontWeight.BOLD), ft.Text("回収数", size=10, color="#BCAEA4")], horizontal_alignment=ft.CrossAxisAlignment.CENTER), 18), glass(ft.Column([ft.Text(str(sum(1 for s in spots if s['visited'])), size=25, weight=ft.FontWeight.BOLD), ft.Text("発見済み", size=10, color="#BCAEA4")], horizontal_alignment=ft.CrossAxisAlignment.CENTER), 18)], alignment=ft.MainAxisAlignment.SPACE_EVENLY)], spacing=10))]
+        metrics = pilot_metrics()
+        return [
+            ft.Container(width=width, height=height, gradient=ft.LinearGradient(colors=["#332018", "#120D0B"])),
+            ft.Container(left=20, top=30, width=width - 40, height=height - 118,
+                         content=ft.Column([
+                             ft.Text("マイバッグ", size=28, weight=ft.FontWeight.BOLD),
+                             ft.Text("回収アクティビティと実証データ", color="#BCAEA4"),
+                             ft.Column([
+                                 glass(ft.Column([ft.Icon(ft.Icons.EMOJI_EVENTS, color="#FFD86B", size=46),
+                                                  ft.Text(f"LEVEL {current_level()}", size=22, weight=ft.FontWeight.BOLD),
+                                                  ft.Text(f"累計 {xp} XP", color="#BCAEA4")],
+                                                 horizontal_alignment=ft.CrossAxisAlignment.CENTER), 20),
+                                 ft.Row([
+                                     glass(ft.Column([ft.Text(str(recycled), size=25, weight=ft.FontWeight.BOLD),
+                                                      ft.Text("自己申告の回収完了", size=9, color="#BCAEA4")],
+                                                     horizontal_alignment=ft.CrossAxisAlignment.CENTER), 14),
+                                     glass(ft.Column([ft.Text(str(sum(1 for s in spots if s['visited'])), size=25, weight=ft.FontWeight.BOLD),
+                                                      ft.Text("チェックイン先", size=9, color="#BCAEA4")],
+                                                     horizontal_alignment=ft.CrossAxisAlignment.CENTER), 14),
+                                 ], alignment=ft.MainAxisAlignment.SPACE_EVENLY),
+                                 glass(ft.Column([
+                                     ft.Row([ft.Icon(ft.Icons.QUERY_STATS, color="#73D7FF"),
+                                             ft.Text("実証指標", size=18, weight=ft.FontWeight.BOLD)], spacing=8),
+                                     ft.Text(f"参加者 {metrics['participants']}人 / 案内完了率 {metrics['guidance_rate']:.0f}%"),
+                                     ft.Text(f"チェックイン {metrics['checkins']}件 / 回収完了（自己申告） {metrics['self_reports']}件", size=11),
+                                     ft.Text(f"第三者確認済み {metrics['third_party_confirmed']}件 / 利用後回答 {metrics['post_answers']}件", size=11),
+                                     ft.Text(f"最多の離脱理由: {metrics['top_barrier']}", size=11, color="#BCAEA4"),
+                                     ft.Text("自己申告と第三者確認は混ぜず、実測値だけを表示します。", size=10, color="#FFD86B"),
+                                 ], spacing=7), 16),
+                                 glass(ft.Column([
+                                     ft.Text("任意アンケート", size=17, weight=ft.FontWeight.BOLD),
+                                     ft.Text("利用前後の変化と、回収までのつまずきを測ります。", size=11, color="#BCAEA4"),
+                                     ft.Row([
+                                         ft.OutlinedButton("利用前" + (" ✓" if survey_data.get("pre") else ""),
+                                                           on_click=lambda e: show_research_survey("pre"), expand=True),
+                                         ft.OutlinedButton("利用後" + (" ✓" if survey_data.get("post") else ""),
+                                                           on_click=lambda e: show_research_survey("post"), expand=True),
+                                     ], spacing=8),
+                                 ], spacing=9), 16),
+                             ], spacing=10, scroll=ft.ScrollMode.AUTO, expand=True),
+                         ], spacing=10)),
+        ]
 
     def render(event: ft.ControlEvent | None = None) -> None:
         width, height = dimensions()
@@ -4350,16 +4600,24 @@ def recovery_go_app(page: ft.Page) -> None:
 
     def activate_account(username: str) -> None:
         nonlocal authenticated_username, user_id, user_name, user_color, xp, recycled
+        nonlocal survey_data, guidance_completed_devices, recycle_reports
+        nonlocal active_spot_filter, selected_device_type
         authenticated_username = username
         user_id = hashlib.sha256(username.encode()).hexdigest()[:8]
         user_name = user_accounts[username].get("display_name") or username
         user_color = ["#FF7A8A", "#73D7FF", "#FFD86B", "#BFA5FF", "#D6A06C"][int(user_id[:2], 16) % 5]
         xp = 0
         recycled = 0
+        survey_data = {"pre": {}, "post": {}}
+        guidance_completed_devices = set()
+        recycle_reports = []
+        active_spot_filter = "すべて"
+        selected_device_type = "すべて"
         for spot in spots:
             spot["favorite"] = False
             spot["visited"] = False
             spot["last_checkin"] = None
+            spot["last_recycle_report"] = None
             spot["visit_count"] = 0
         try:
             page.client_storage.set("m3ow.auth_user", username)
@@ -4367,11 +4625,22 @@ def recovery_go_app(page: ft.Page) -> None:
             if isinstance(account_state, dict):
                 xp = int(account_state.get("xp", 0))
                 recycled = int(account_state.get("recycled", 0))
+                active_spot_filter = account_state.get("filter", "すべて")
+                selected_device_type = account_state.get("device_type", "すべて")
+                saved_surveys = account_state.get("surveys", {})
+                if isinstance(saved_surveys, dict):
+                    survey_data = {"pre": dict(saved_surveys.get("pre") or {}),
+                                   "post": dict(saved_surveys.get("post") or {})}
+                guidance_completed_devices = set(account_state.get("guidance_completed_devices") or [])
+                recycle_reports = list(account_state.get("recycle_reports") or [])
+                recycled = sum(1 for report in recycle_reports
+                               if isinstance(report, dict) and report.get("verification") == "self_reported")
                 for spot in spots:
                     state = account_state.get("spots", {}).get(spot["name"], {})
                     spot["favorite"] = bool(state.get("favorite", False))
                     spot["visited"] = bool(state.get("visited", False))
                     spot["last_checkin"] = state.get("last_checkin")
+                    spot["last_recycle_report"] = state.get("last_recycle_report")
                     spot["visit_count"] = int(state.get("visit_count", 0))
         except Exception:
             pass
